@@ -4,6 +4,11 @@
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>ru</string>
+    </array>
     <key>CFBundleExecutable</key>
     <string>DynamicIsland</string>
     <key>CFBundleIdentifier</key>
@@ -30,6 +35,10 @@
     <string>Dynamic Island shows today's events from your calendars.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>Dynamic Island shows today's events from your calendars.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Dynamic Island shows today's reminders in the Schedule block.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Dynamic Island shows today's reminders in the Schedule block.</string>
     <key>NSLocationUsageDescription</key>
     <string>Dynamic Island shows the weather for your current location.</string>
     <key>NSLocationWhenInUseUsageDescription</key>

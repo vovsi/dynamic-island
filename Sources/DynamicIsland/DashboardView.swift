@@ -6,11 +6,14 @@ struct DashboardView: View {
     let horizontalInset: CGFloat
     let updateAvailable: Bool
     let isWeatherExpanded: Bool
+    let isKeepAwakePickerOpen: Bool
     let onOpenSettings: () -> Void
     let onWeatherToggle: () -> Void
+    let onKeepAwakePickerToggle: () -> Void
     let onWeatherFrame: (CGRect) -> Void
 
     @ObservedObject private var store = CalendarStore.shared
+    @ObservedObject private var keepAwake = KeepAwakeManager.shared
 
     private var weatherHeight: CGFloat { max(notchSize.height - 8, 20) }
     private let cardSpacing: CGFloat = 10
@@ -48,6 +51,13 @@ struct DashboardView: View {
                     .padding(.top, notchSize.height + cardSpacing)
                     .transition(.scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity))
             }
+
+            if isKeepAwakePickerOpen {
+                KeepAwakePicker(manager: keepAwake, onClose: onKeepAwakePickerToggle)
+                    .frame(maxWidth: .infinity, alignment: .topTrailing)
+                    .padding(.top, notchSize.height + 4)
+                    .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
+            }
         }
         .onPreferenceChange(WeatherFrameKey.self) { frame in
             MainActor.assumeIsolated { onWeatherFrame(frame) }
@@ -58,8 +68,28 @@ struct DashboardView: View {
 
     /// Top row sits beside the camera housing.
     private var header: some View {
-        HStack {
+        HStack(spacing: 6) {
             Spacer(minLength: 0)
+            if let end = keepAwake.endDate {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(KeepAwakeManager.remainingText(until: end, now: context.date))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .help(tr("Keep-awake mode is on", "Режим «не спать» включён"))
+            }
+            Button(action: onKeepAwakePickerToggle) {
+                Image(systemName: "pills.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(keepAwake.isActive ? .orange : .white.opacity(0.75))
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
+            }
+            .buttonStyle(.plain)
+            .help(tr("Keep the Mac awake", "Не давать Mac уснуть"))
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -73,9 +103,72 @@ struct DashboardView: View {
                     }
             }
             .buttonStyle(.plain)
-            .help(updateAvailable ? "Settings — update available" : "Settings")
+            .help(updateAvailable ? tr("Settings — update available", "Настройки — доступно обновление") : tr("Settings", "Настройки"))
         }
         .frame(height: notchSize.height)
+    }
+}
+
+// MARK: - Keep awake
+
+/// Hour presets for the keep-awake mode, shown under the pill button.
+private struct KeepAwakePicker: View {
+    @ObservedObject var manager: KeepAwakeManager
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "pills.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
+                Text(tr("Keep awake for", "Не спать в течение"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer(minLength: 8)
+                if manager.isActive {
+                    chip(tr("Turn off", "Выключить"), tint: .red) {
+                        manager.stop()
+                        onClose()
+                    }
+                }
+            }
+            HStack(spacing: 5) {
+                ForEach(KeepAwakeManager.presets, id: \.self) { hours in
+                    chip(tr("\(hours) h", "\(hours) ч"), tint: .white) {
+                        manager.activate(hours: hours)
+                        onClose()
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .fixedSize()
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(white: 0.12))
+                .shadow(color: .black.opacity(0.6), radius: 14, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture {}
+    }
+
+    private func chip(_ title: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(tint.opacity(0.14)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -87,11 +180,11 @@ private struct EventsCard: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        Card(title: "Events", icon: "calendar", tint: .red, trailing: now.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))) {
+        Card(title: CalendarBlock.events.title, icon: "calendar", tint: .red, onTap: { openApp(bundleID: "com.apple.iCal") }) {
             if let placeholder = AccessPlaceholder(store: store, onOpenSettings: onOpenSettings) {
                 placeholder
             } else if store.events.isEmpty {
-                Placeholder(text: "No events today.")
+                Placeholder(text: tr("No events today.", "Сегодня событий нет."))
             } else {
                 EventList(events: store.events, now: now) { event in
                     EventRow(event: event, now: now)
@@ -107,13 +200,15 @@ private struct ScheduleCard: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        Card(title: "Schedule", icon: "clock", tint: .blue, trailing: nil) {
+        Card(title: CalendarBlock.schedule.title, icon: "clock", tint: .blue, onTap: { openApp(bundleID: "com.apple.reminders") }) {
             if let placeholder = AccessPlaceholder(store: store, onOpenSettings: onOpenSettings) {
                 placeholder
-            } else if !store.hasScheduleCalendars {
-                Placeholder(text: "Connect your Google account.", action: "Connect", perform: store.openInternetAccounts)
             } else if store.schedule.isEmpty {
-                Placeholder(text: "Nothing scheduled today.")
+                if store.hasScheduleCalendars {
+                    Placeholder(text: tr("Nothing scheduled today.", "На сегодня ничего не запланировано."))
+                } else {
+                    Placeholder(text: tr("Connect your Google account.", "Подключите аккаунт Google."), action: tr("Connect", "Подключить"), perform: store.openInternetAccounts)
+                }
             } else {
                 let next = store.schedule.first { !$0.isAllDay && $0.start > now }?.id
                 EventList(events: store.schedule, now: now) { event in
@@ -137,11 +232,11 @@ private struct AccessPlaceholder: View {
 
     var body: some View {
         if store.access == .notDetermined {
-            Placeholder(text: "Calendar access is required.", action: "Allow Access") {
+            Placeholder(text: tr("Calendar access is required.", "Нужен доступ к Календарю."), action: tr("Allow Access", "Разрешить")) {
                 Task { await store.requestAccess() }
             }
         } else {
-            Placeholder(text: "Calendar access is denied.", action: "Open Settings", perform: store.openPrivacySettings)
+            Placeholder(text: tr("Calendar access is denied.", "Доступ к Календарю запрещён."), action: tr("Open Settings", "Открыть настройки"), perform: store.openPrivacySettings)
         }
     }
 }
@@ -150,7 +245,7 @@ private struct Card<Content: View>: View {
     let title: String
     let icon: String
     let tint: Color
-    let trailing: String?
+    let onTap: () -> Void
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -163,11 +258,6 @@ private struct Card<Content: View>: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
                 Spacer(minLength: 4)
-                if let trailing {
-                    Text(trailing)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                }
             }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -182,7 +272,14 @@ private struct Card<Content: View>: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(.white.opacity(0.06), lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture(perform: onTap)
     }
+}
+
+private func openApp(bundleID: String) {
+    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+    NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
 }
 
 private struct Placeholder: View {
@@ -237,7 +334,7 @@ private struct EventList<Row: View>: View {
 // MARK: - Rows
 
 private func timeText(_ date: Date) -> String {
-    date.formatted(date: .omitted, time: .shortened)
+    date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: L10n.locale))
 }
 
 private struct EventRow: View {
@@ -249,7 +346,7 @@ private struct EventRow: View {
             Capsule()
                 .fill(event.color)
                 .frame(width: 3, height: 14)
-            Text(event.isAllDay ? "All day" : "\(timeText(event.start))–\(timeText(event.end))")
+            Text(event.isAllDay ? tr("All day", "Весь день") : "\(timeText(event.start))–\(timeText(event.end))")
                 .font(.system(size: 10, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.55))
@@ -271,15 +368,13 @@ private struct ScheduleRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(event.isAllDay ? "All day" : timeText(event.start))
+            Text(event.isAllDay ? tr("All day", "Весь день") : timeText(event.start))
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .frame(minWidth: 40, alignment: .leading)
                 .fixedSize()
-            Capsule()
-                .fill(event.color)
-                .frame(width: 3, height: 14)
+            marker
             Text(event.title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
@@ -298,10 +393,26 @@ private struct ScheduleRow: View {
 
     private var isOngoing: Bool { !event.isAllDay && event.isOngoing(at: now) }
 
+    /// Calendar events get a color bar, reminders an empty checkbox circle.
+    @ViewBuilder
+    private var marker: some View {
+        if event.isReminder {
+            Image(systemName: "circle")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(event.color)
+                .frame(width: 9)
+        } else {
+            Capsule()
+                .fill(event.color)
+                .frame(width: 3, height: 14)
+                .frame(width: 9)
+        }
+    }
+
     @ViewBuilder
     private var badge: some View {
         if isOngoing {
-            Text("Now")
+            Text(tr("Now", "Сейчас"))
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.green)
         } else if isNext {
@@ -309,7 +420,7 @@ private struct ScheduleRow: View {
                 .font(.system(size: 9, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Color.accentColor)
-        } else if !event.isAllDay {
+        } else if !event.isAllDay && !event.isReminder {
             Text(timeText(event.end))
                 .font(.system(size: 9, weight: .medium))
                 .monospacedDigit()
@@ -319,8 +430,10 @@ private struct ScheduleRow: View {
 
     static func relative(from now: Date, to date: Date) -> String {
         let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
-        if minutes < 60 { return "in \(minutes) min" }
+        if minutes < 60 { return tr("in \(minutes) min", "через \(minutes) мин") }
         let hours = minutes / 60, rest = minutes % 60
-        return rest == 0 ? "in \(hours) h" : "in \(hours) h \(rest) min"
+        return rest == 0
+            ? tr("in \(hours) h", "через \(hours) ч")
+            : tr("in \(hours) h \(rest) min", "через \(hours) ч \(rest) мин")
     }
 }

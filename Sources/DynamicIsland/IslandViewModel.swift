@@ -12,6 +12,8 @@ final class IslandViewModel: ObservableObject {
     @Published var isHovering = false
     @Published var notch: NotchInfo = .fallback
     @Published var isWeatherExpanded = false
+    /// Hour picker for the keep-awake mode, opened by the pill button.
+    @Published var isKeepAwakePickerOpen = false
     /// A schedule event is about to start (or has just started): shown beside the collapsed notch.
     @Published var hasEventAlert = false
 
@@ -21,6 +23,7 @@ final class IslandViewModel: ObservableObject {
     var onOpenSettings: () -> Void = {}
     var onCollapseRequest: () -> Void = {}
     var onWeatherToggle: () -> Void = {}
+    var onKeepAwakePickerToggle: () -> Void = {}
     var onDismissEventAlert: () -> Void = {}
 
     // MARK: - Geometry

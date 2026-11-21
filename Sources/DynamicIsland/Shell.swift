@@ -10,7 +10,7 @@ enum Shell {
                 .split(separator: "\n", omittingEmptySubsequences: true)
                 .suffix(3)
                 .joined(separator: "\n")
-            return tail.isEmpty ? "Command failed with exit code \(status)." : tail
+            return tail.isEmpty ? tr("Command failed with exit code \(status).", "Команда завершилась с кодом \(status).") : tail
         }
     }
 

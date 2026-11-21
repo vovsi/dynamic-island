@@ -31,6 +31,20 @@ final class MacCalendarSource {
         }
     }
 
+    var remindersAccess: Access {
+        switch EKEventStore.authorizationStatus(for: .reminder) {
+        case .fullAccess: return .granted
+        case .notDetermined: return .notDetermined
+        default: return .denied
+        }
+    }
+
+    func requestRemindersAccess() async -> Bool {
+        let granted = (try? await store.requestFullAccessToReminders()) ?? false
+        if granted { store = EKEventStore() }
+        return granted
+    }
+
     func requestAccess() async -> Bool {
         let granted = (try? await store.requestFullAccessToEvents()) ?? false
         // A fresh store picks up calendars that became visible after the grant.
@@ -70,7 +84,7 @@ final class MacCalendarSource {
                 DayEvent(
                     id: "\($0.calendarItemIdentifier)|\($0.startDate.timeIntervalSince1970)",
                     calendarID: $0.calendar.calendarIdentifier,
-                    title: $0.title?.isEmpty == false ? $0.title : "(No title)",
+                    title: $0.title?.isEmpty == false ? $0.title : tr("(No title)", "(Без названия)"),
                     start: $0.startDate,
                     end: $0.endDate,
                     isAllDay: $0.isAllDay,
@@ -78,6 +92,38 @@ final class MacCalendarSource {
                 )
             }
             .sorted(by: DayEvent.order)
+    }
+
+    /// Incomplete reminders due within [start, end), from all reminder lists.
+    func reminders(from start: Date, to end: Date) async -> [DayEvent] {
+        guard remindersAccess == .granted else { return [] }
+        let predicate = store.predicateForIncompleteReminders(withDueDateStarting: start, ending: end, calendars: nil)
+        return await Self.fetchReminders(store: store, predicate: predicate)
+    }
+
+    private nonisolated static func fetchReminders(store: EKEventStore, predicate: NSPredicate) async -> [DayEvent] {
+        await withCheckedContinuation { continuation in
+            store.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: (reminders ?? []).compactMap(dayEvent))
+            }
+        }
+    }
+
+    private nonisolated static func dayEvent(_ reminder: EKReminder) -> DayEvent? {
+        guard let components = reminder.dueDateComponents,
+              let due = Calendar.current.date(from: components) else { return nil }
+        let isAllDay = components.hour == nil
+        let start = isAllDay ? Calendar.current.startOfDay(for: due) : due
+        return DayEvent(
+            id: "reminder|\(reminder.calendarItemIdentifier)",
+            calendarID: reminder.calendar.calendarIdentifier,
+            title: reminder.title?.isEmpty == false ? reminder.title : tr("(No title)", "(Без названия)"),
+            start: start,
+            end: isAllDay ? Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start : start,
+            isAllDay: isAllDay,
+            color: Color(nsColor: reminder.calendar.color),
+            isReminder: true
+        )
     }
 
     private static func isDeclined(_ event: EKEvent) -> Bool {

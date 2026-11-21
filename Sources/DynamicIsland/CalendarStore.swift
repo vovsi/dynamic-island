@@ -29,6 +29,10 @@ final class CalendarStore: ObservableObject {
 
     private let source = MacCalendarSource()
     private var timer: Timer?
+    /// Calendar part of `schedule`; today's reminders are merged into it once fetched.
+    private var scheduleEvents: [DayEvent] = []
+    private var reminders: [DayEvent] = []
+    private var remindersTask: Task<Void, Never>?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
 
     var hasScheduleCalendars: Bool { calendars.contains { $0.block == .schedule } }
@@ -49,6 +53,7 @@ final class CalendarStore: ObservableObject {
 
         Task {
             if source.access == .notDetermined { _ = await source.requestAccess() }
+            if source.remindersAccess == .notDetermined { _ = await source.requestRemindersAccess() }
             refresh()
         }
     }
@@ -76,6 +81,8 @@ final class CalendarStore: ObservableObject {
         }
         guard access == .ready else {
             events = []
+            scheduleEvents = []
+            reminders = []
             schedule = []
             calendars = []
             return
@@ -103,14 +110,28 @@ final class CalendarStore: ObservableObject {
             calendarIDs: Set(calendars.filter { $0.block != .hidden }.map(\.id))
         )
         events = all.filter { blocks[$0.calendarID] == .events }
-        schedule = all.filter { blocks[$0.calendarID] == .schedule }
+        scheduleEvents = all.filter { blocks[$0.calendarID] == .schedule }
+        mergeSchedule()
         lastRefresh = Date()
+
+        remindersTask?.cancel()
+        remindersTask = Task {
+            let fetched = await source.reminders(from: today.start, to: today.end)
+            guard !Task.isCancelled else { return }
+            reminders = fetched
+            mergeSchedule()
+        }
+    }
+
+    private func mergeSchedule() {
+        schedule = (scheduleEvents + reminders).sorted(by: DayEvent.order)
     }
 
     // MARK: - Actions
 
     func requestAccess() async {
         _ = await source.requestAccess()
+        if source.remindersAccess == .notDetermined { _ = await source.requestRemindersAccess() }
         refresh()
     }
 

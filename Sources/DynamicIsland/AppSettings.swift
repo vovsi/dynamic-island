@@ -7,6 +7,7 @@ enum AppSettings {
     static let eventAlertLeadKey = "eventAlertLeadMinutes"
     static let eventAlertTrailKey = "eventAlertTrailMinutes"
     static let eventAlertSoundKey = "eventAlertSound"
+    static let languageKey = "language"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -16,6 +17,7 @@ enum AppSettings {
             eventAlertLeadKey: 5,
             eventAlertTrailKey: 5,
             eventAlertSoundKey: true,
+            languageKey: AppLanguage.system.rawValue,
         ])
     }
 

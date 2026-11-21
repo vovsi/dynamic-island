@@ -18,7 +18,7 @@ struct WeatherPill: View {
             .onTapGesture {
                 weather.current == nil ? onOpenSettings() : onToggle()
             }
-            .help(weather.current == nil ? "Weather settings" : "")
+            .help(weather.current == nil ? tr("Weather settings", "Настройки погоды") : "")
     }
 
     // MARK: - Compact
@@ -43,7 +43,7 @@ struct WeatherPill: View {
                 Image(systemName: weather.status == .needsLocation ? "location.slash" : "cloud")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
-                Text(weather.status == .loading ? "Weather…" : "Set location")
+                Text(weather.status == .loading ? tr("Weather…", "Погода…") : tr("Set location", "Указать город"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -125,8 +125,8 @@ struct WeatherForecastPanel: View {
     }
 
     private func details(_ current: WeatherStore.Current) -> String {
-        let wind = String(format: "%.0f", current.windSpeed) + (weather.usesMetric ? " m/s" : " mph")
-        return "Feels \(WeatherPill.degrees(current.apparentTemperature)) · \(wind) · \(Int(current.humidity))%"
+        let wind = String(format: "%.0f", current.windSpeed) + (weather.usesMetric ? tr(" m/s", " м/с") : tr(" mph", " миль/ч"))
+        return tr("Feels", "Ощущается") + " \(WeatherPill.degrees(current.apparentTemperature)) · \(wind) · \(Int(current.humidity))%"
     }
 }
 
@@ -136,15 +136,15 @@ private struct DayRow: View {
     let weekLow: Double
     let weekHigh: Double
 
-    private static let weekday: Date.FormatStyle = {
-        var style = Date.FormatStyle().weekday(.abbreviated)
+    private static var weekday: Date.FormatStyle {
+        var style = Date.FormatStyle(locale: L10n.locale).weekday(.abbreviated)
         style.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         return style
-    }()
+    }
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(isToday ? "Today" : day.date.formatted(Self.weekday))
+            Text(isToday ? tr("Today", "Сегодня") : day.date.formatted(Self.weekday))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(isToday ? 1 : 0.75))
                 .frame(width: 42, alignment: .leading)

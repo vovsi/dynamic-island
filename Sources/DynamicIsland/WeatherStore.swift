@@ -137,12 +137,12 @@ final class WeatherStore: NSObject, ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "name", value: query),
             URLQueryItem(name: "count", value: "1"),
-            URLQueryItem(name: "language", value: Locale.current.language.languageCode?.identifier ?? "en"),
+            URLQueryItem(name: "language", value: L10n.languageCode),
             URLQueryItem(name: "format", value: "json"),
         ]
         let (data, _) = try await URLSession.shared.data(from: components.url!)
         guard let result = try JSONDecoder().decode(GeocodingDTO.self, from: data).results?.first else {
-            throw WeatherError(message: "City “\(query)” not found.")
+            throw WeatherError(message: tr("City “\(query)” not found.", "Город «\(query)» не найден."))
         }
         return (query, result.name, result.latitude, result.longitude)
     }
@@ -164,7 +164,7 @@ final class WeatherStore: NSObject, ObservableObject {
         do {
             let (data, response) = try await URLSession.shared.data(from: components.url!)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw WeatherError(message: "Weather service is unavailable.")
+                throw WeatherError(message: tr("Weather service is unavailable.", "Сервис погоды недоступен."))
             }
             let dto = try JSONDecoder().decode(ForecastDTO.self, from: data)
 
@@ -262,22 +262,22 @@ enum WeatherCondition {
 
     static func title(code: Int) -> String {
         switch code {
-        case 0: return "Clear"
-        case 1: return "Mostly clear"
-        case 2: return "Partly cloudy"
-        case 3: return "Cloudy"
-        case 45, 48: return "Fog"
-        case 51, 53, 55: return "Drizzle"
-        case 56, 57: return "Freezing drizzle"
-        case 61, 63: return "Rain"
-        case 65: return "Heavy rain"
-        case 66, 67: return "Freezing rain"
-        case 71, 73, 77: return "Snow"
-        case 75: return "Heavy snow"
-        case 80, 81, 82: return "Showers"
-        case 85, 86: return "Snow showers"
-        case 95: return "Thunderstorm"
-        case 96, 99: return "Thunderstorm, hail"
+        case 0: return tr("Clear", "Ясно")
+        case 1: return tr("Mostly clear", "Преимущественно ясно")
+        case 2: return tr("Partly cloudy", "Переменная облачность")
+        case 3: return tr("Cloudy", "Пасмурно")
+        case 45, 48: return tr("Fog", "Туман")
+        case 51, 53, 55: return tr("Drizzle", "Морось")
+        case 56, 57: return tr("Freezing drizzle", "Ледяная морось")
+        case 61, 63: return tr("Rain", "Дождь")
+        case 65: return tr("Heavy rain", "Сильный дождь")
+        case 66, 67: return tr("Freezing rain", "Ледяной дождь")
+        case 71, 73, 77: return tr("Snow", "Снег")
+        case 75: return tr("Heavy snow", "Сильный снег")
+        case 80, 81, 82: return tr("Showers", "Ливень")
+        case 85, 86: return tr("Snow showers", "Снегопад")
+        case 95: return tr("Thunderstorm", "Гроза")
+        case 96, 99: return tr("Thunderstorm, hail", "Гроза с градом")
         default: return "—"
         }
     }

@@ -5,6 +5,7 @@ struct IslandRootView: View {
 
     @ObservedObject var viewModel: IslandViewModel
     @ObservedObject private var updates = UpdateManager.shared
+    @AppStorage(AppSettings.languageKey) private var language = AppLanguage.system.rawValue
     var onTap: () -> Void
 
     var body: some View {
@@ -27,10 +28,13 @@ struct IslandRootView: View {
                         horizontalInset: viewModel.topRadius + 18,
                         updateAvailable: updates.isUpdateAvailable,
                         isWeatherExpanded: viewModel.isWeatherExpanded,
+                        isKeepAwakePickerOpen: viewModel.isKeepAwakePickerOpen,
                         onOpenSettings: viewModel.onOpenSettings,
                         onWeatherToggle: viewModel.onWeatherToggle,
+                        onKeepAwakePickerToggle: viewModel.onKeepAwakePickerToggle,
                         onWeatherFrame: { viewModel.weatherFrame = $0 }
                     )
+                    .id(language)
                     .transition(.islandContent)
                 } else if viewModel.hasEventAlert {
                     EventAlertIndicator(
@@ -51,13 +55,14 @@ struct IslandRootView: View {
         .contentShape(shape)
         .onTapGesture { onTap() }
         .contextMenu {
-            Button("Settings…") { viewModel.onOpenSettings() }
-            Button("Check for Updates") { Task { await UpdateManager.shared.check() } }
+            Button(tr("Settings…", "Настройки…")) { viewModel.onOpenSettings() }
+            Button(tr("Check for Updates", "Проверить обновления")) { Task { await UpdateManager.shared.check() } }
             Divider()
-            Button("Quit Dynamic Island") { NSApp.terminate(nil) }
+            Button(tr("Quit Dynamic Island", "Завершить Dynamic Island")) { NSApp.terminate(nil) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
+        .environment(\.locale, L10n.locale)
     }
 }
 
@@ -95,7 +100,7 @@ private struct EventAlertIndicator: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("Dismiss this alert")
+                    .help(tr("Dismiss this alert", "Скрыть напоминание"))
                     .transition(.opacity)
                 } else {
                     Image(systemName: "clock.fill")

@@ -39,6 +39,10 @@ final class IslandController {
             guard let self else { return }
             withAnimation(self.weatherAnimation) { self.viewModel.isWeatherExpanded.toggle() }
         }
+        viewModel.onKeepAwakePickerToggle = { [weak self] in
+            guard let self else { return }
+            withAnimation(self.weatherAnimation) { self.viewModel.isKeepAwakePickerOpen.toggle() }
+        }
 
         let panel = NotchPanel(contentRect: .zero)
         let host = FirstMouseHostingView(rootView: IslandRootView(viewModel: viewModel, onTap: { [weak self] in
@@ -232,6 +236,7 @@ final class IslandController {
             viewModel.state = .collapsed
             viewModel.isHovering = false
             viewModel.isWeatherExpanded = false
+            viewModel.isKeepAwakePickerOpen = false
         }
         handleMouseMove()
     }

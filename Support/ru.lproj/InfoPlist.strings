@@ -1,0 +1,7 @@
+/* System permission prompts (follow the macOS language). */
+"NSCalendarsFullAccessUsageDescription" = "Dynamic Island показывает сегодняшние события из ваших календарей.";
+"NSCalendarsUsageDescription" = "Dynamic Island показывает сегодняшние события из ваших календарей.";
+"NSRemindersFullAccessUsageDescription" = "Dynamic Island показывает сегодняшние напоминания в блоке «Расписание».";
+"NSRemindersUsageDescription" = "Dynamic Island показывает сегодняшние напоминания в блоке «Расписание».";
+"NSLocationUsageDescription" = "Dynamic Island показывает погоду для вашего текущего местоположения.";
+"NSLocationWhenInUseUsageDescription" = "Dynamic Island показывает погоду для вашего текущего местоположения.";

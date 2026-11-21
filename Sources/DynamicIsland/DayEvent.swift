@@ -8,6 +8,8 @@ struct DayEvent: Identifiable, Equatable {
     let end: Date
     let isAllDay: Bool
     let color: Color
+    /// Item from the Reminders app (zero-length at its due time) rather than a calendar event.
+    var isReminder = false
 
     func isOngoing(at date: Date) -> Bool { start <= date && date < end }
     func hasEnded(at date: Date) -> Bool { end <= date }
@@ -37,9 +39,9 @@ enum CalendarBlock: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .events: return "Events"
-        case .schedule: return "Schedule"
-        case .hidden: return "Hidden"
+        case .events: return tr("Events", "События")
+        case .schedule: return tr("Schedule", "Расписание")
+        case .hidden: return tr("Hidden", "Скрыт")
         }
     }
 }

@@ -72,7 +72,7 @@ final class UpdateManager: ObservableObject {
     func check() async {
         guard !isBusy else { return }
         guard !repoURL.isEmpty else {
-            status = .failed(message: "Repository URL is unknown. Build the app with scripts/build.sh.")
+            status = .failed(message: tr("Repository URL is unknown. Build the app with scripts/build.sh.", "URL репозитория неизвестен. Соберите приложение через scripts/build.sh."))
             return
         }
 
@@ -81,7 +81,7 @@ final class UpdateManager: ObservableObject {
             let output = try await Shell.run("/usr/bin/git", ["ls-remote", repoURL, "refs/heads/\(branch)"])
             guard let remote = output.split(whereSeparator: \.isWhitespace).first.map(String.init),
                   remote.count == 40 else {
-                throw Shell.Failure(status: 1, output: "Branch '\(branch)' not found on remote.")
+                throw Shell.Failure(status: 1, output: tr("Branch '\(branch)' not found on remote.", "Ветка «\(branch)» не найдена на remote."))
             }
             lastChecked = Date()
             status = remote == currentCommit ? .upToDate : .available(remoteCommit: remote)
@@ -95,18 +95,18 @@ final class UpdateManager: ObservableObject {
     func performUpdate() async {
         guard !isBusy else { return }
         guard let script = Bundle.main.url(forResource: "self-update", withExtension: "sh") else {
-            status = .failed(message: "Updater script is missing from the app bundle.")
+            status = .failed(message: tr("Updater script is missing from the app bundle.", "В бандле приложения нет скрипта обновления."))
             return
         }
 
         let appPath = Bundle.main.bundlePath
         guard appPath.hasSuffix(".app") else {
-            status = .failed(message: "Updates are available only for the bundled app.")
+            status = .failed(message: tr("Updates are available only for the bundled app.", "Обновления доступны только для собранного .app."))
             return
         }
 
         log = ""
-        status = .updating(step: "Fetching latest sources…")
+        status = .updating(step: tr("Fetching latest sources…", "Загрузка исходников…"))
 
         do {
             let output = try await Shell.run(
@@ -120,10 +120,10 @@ final class UpdateManager: ObservableObject {
                 .split(separator: "\n")
                 .last(where: { $0.hasPrefix("APP_PATH=") })?
                 .dropFirst("APP_PATH=".count) else {
-                throw Shell.Failure(status: 1, output: "Build finished without producing an app.")
+                throw Shell.Failure(status: 1, output: tr("Build finished without producing an app.", "Сборка завершилась, но .app не создан."))
             }
 
-            status = .updating(step: "Installing and restarting…")
+            status = .updating(step: tr("Installing and restarting…", "Установка и перезапуск…"))
             try installAndRelaunch(script: script.path, newApp: String(builtApp), target: appPath)
         } catch {
             status = .failed(message: error.localizedDescription)
@@ -135,9 +135,9 @@ final class UpdateManager: ObservableObject {
         if log.count > 20_000 { log = String(log.suffix(20_000)) }
 
         if chunk.contains("Cloning") || chunk.contains("Fetching") {
-            status = .updating(step: "Fetching latest sources…")
+            status = .updating(step: tr("Fetching latest sources…", "Загрузка исходников…"))
         } else if chunk.contains("Compiling") || chunk.contains("Building") {
-            status = .updating(step: "Building…")
+            status = .updating(step: tr("Building…", "Сборка…"))
         }
     }
 

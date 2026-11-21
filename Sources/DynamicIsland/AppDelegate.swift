@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         CalendarStore.shared.start()
         WeatherStore.shared.start()
+        KeepAwakeManager.shared.start()
         UpdateManager.shared.startAutoCheck()
     }
 
