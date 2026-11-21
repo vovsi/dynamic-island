@@ -47,6 +47,7 @@ enum CalendarBlock: String, CaseIterable, Identifiable {
 struct CalendarOption: Identifiable, Equatable {
     let id: String
     let title: String
+    let accountID: String
     let account: String
     let color: Color
     var block: CalendarBlock

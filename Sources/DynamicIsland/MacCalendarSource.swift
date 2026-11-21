@@ -14,6 +14,7 @@ final class MacCalendarSource {
     struct CalendarInfo {
         let id: String
         let title: String
+        let accountID: String
         let account: String
         let color: Color
         /// Google (or another third-party CalDAV) account — goes to the schedule by default.
@@ -37,8 +38,10 @@ final class MacCalendarSource {
         return granted
     }
 
-    /// Asks EventKit to sync remote accounts; changes arrive via `EKEventStoreChanged`.
-    func syncRemoteSources() {
+    /// Re-creates the store so accounts added in System Settings show up (a long-lived store keeps
+    /// its initial source list), then asks EventKit to sync them; changes arrive via `EKEventStoreChanged`.
+    func reloadSources() {
+        store = EKEventStore()
         store.refreshSourcesIfNecessary()
     }
 
@@ -48,6 +51,7 @@ final class MacCalendarSource {
             return CalendarInfo(
                 id: calendar.calendarIdentifier,
                 title: calendar.title,
+                accountID: source?.sourceIdentifier ?? "",
                 account: source?.title ?? "",
                 color: Color(nsColor: calendar.color),
                 isRemoteAccount: source.map(Self.isRemoteAccount) ?? false

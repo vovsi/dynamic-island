@@ -22,6 +22,7 @@ final class SettingsWindowController {
             window.center()
             self.window = window
         }
+        CalendarStore.shared.refresh()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -163,9 +164,9 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
 
-        ForEach(accounts, id: \.self) { account in
-            Section(account.isEmpty ? "Other" : account) {
-                ForEach(calendars.calendars.filter { $0.account == account }) { option in
+        ForEach(accounts, id: \.id) { account in
+            Section(account.title) {
+                ForEach(calendars.calendars.filter { $0.accountID == account.id }) { option in
                     Picker(selection: Binding(
                         get: { option.block },
                         set: { calendars.setBlock($0, for: option.id) }
@@ -182,9 +183,17 @@ struct SettingsView: View {
         }
     }
 
-    private var accounts: [String] {
+    /// One section per account; same-named accounts (e.g. two "Google") get a number.
+    private var accounts: [(id: String, title: String)] {
         var seen = Set<String>()
-        return calendars.calendars.map(\.account).filter { seen.insert($0).inserted }
+        var titleCount: [String: Int] = [:]
+        return calendars.calendars.compactMap { option in
+            guard seen.insert(option.accountID).inserted else { return nil }
+            let base = option.account.isEmpty ? "Other" : option.account
+            titleCount[base, default: 0] += 1
+            let number = titleCount[base]!
+            return (option.accountID, number == 1 ? base : "\(base) \(number)")
+        }
     }
 
     @ViewBuilder

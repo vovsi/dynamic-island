@@ -64,7 +64,7 @@ final class CalendarStore: ObservableObject {
 
     /// Syncs remote accounts and reloads today's events.
     func refresh() {
-        if source.access == .granted { source.syncRemoteSources() }
+        if source.access == .granted { source.reloadSources() }
         reload()
     }
 
@@ -87,6 +87,7 @@ final class CalendarStore: ObservableObject {
                 CalendarOption(
                     id: $0.id,
                     title: $0.title,
+                    accountID: $0.accountID,
                     account: $0.account,
                     color: $0.color,
                     block: overrides[$0.id] ?? ($0.isRemoteAccount ? .schedule : .events)
