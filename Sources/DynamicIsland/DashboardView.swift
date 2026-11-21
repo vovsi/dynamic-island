@@ -14,6 +14,7 @@ struct DashboardView: View {
 
     @ObservedObject private var store = CalendarStore.shared
     @ObservedObject private var keepAwake = KeepAwakeManager.shared
+    @ObservedObject private var keyboardLock = KeyboardLockManager.shared
 
     private var weatherHeight: CGFloat { max(notchSize.height - 8, 20) }
     private let cardSpacing: CGFloat = 10
@@ -70,6 +71,14 @@ struct DashboardView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Spacer(minLength: 0)
+            Button(action: keyboardLock.toggle) {
+                TouchpadIcon(color: keyboardLock.isLocked ? .orange : .white.opacity(0.75))
+                    .frame(width: 13, height: 11)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(.white.opacity(keyboardLock.isLocked ? 0.2 : 0.1)))
+            }
+            .buttonStyle(.plain)
+            .help(tr("Keyboard cleaning", "Очистка клавиатуры"))
             if let end = keepAwake.endDate {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(KeepAwakeManager.remainingText(until: end, now: context.date))
@@ -88,7 +97,7 @@ struct DashboardView: View {
                     .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
-            .help(tr("Keep the Mac awake", "Не давать Mac уснуть"))
+            .help(tr("Anti-sleep", "Антисон"))
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -102,9 +111,33 @@ struct DashboardView: View {
                     }
             }
             .buttonStyle(.plain)
-            .help(updateAvailable ? tr("Settings — update available", "Настройки — доступно обновление") : tr("Settings", "Настройки"))
+            .help(tr("Settings", "Настройки"))
         }
         .frame(height: notchSize.height)
+    }
+}
+
+// MARK: - Keyboard lock
+
+/// Touchpad with two buttons along its bottom edge, stroked as one path so overlaps keep an even tint.
+private struct TouchpadIcon: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let w = proxy.size.width, h = proxy.size.height
+            let line = max(w * 0.11, 1.2)
+            let rect = CGRect(x: 0, y: 0, width: w, height: h).insetBy(dx: line / 2, dy: line / 2)
+            let buttonsTop = rect.minY + rect.height * 0.66
+            Path { path in
+                path.addRoundedRect(in: rect, cornerSize: CGSize(width: w * 0.18, height: w * 0.18), style: .continuous)
+                path.move(to: CGPoint(x: rect.minX, y: buttonsTop))
+                path.addLine(to: CGPoint(x: rect.maxX, y: buttonsTop))
+                path.move(to: CGPoint(x: rect.midX, y: buttonsTop))
+                path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            }
+            .stroke(color, lineWidth: line)
+        }
     }
 }
 
