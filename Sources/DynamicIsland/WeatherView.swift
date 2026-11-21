@@ -18,7 +18,7 @@ struct WeatherPill: View {
             .onTapGesture {
                 weather.current == nil ? onOpenSettings() : onToggle()
             }
-            .help(weather.current == nil ? tr("Weather settings", "Настройки погоды") : "")
+            .hoverHint(weather.current == nil ? tr("Weather settings", "Настройки погоды") : nil)
     }
 
     // MARK: - Compact

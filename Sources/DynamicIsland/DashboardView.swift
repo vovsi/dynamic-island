@@ -78,7 +78,7 @@ struct DashboardView: View {
                     .background(Circle().fill(.white.opacity(keyboardLock.isLocked ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
-            .help(tr("Keyboard cleaning", "Очистка клавиатуры"))
+            .hoverHint(tr("Keyboard cleaning", "Очистка клавиатуры"))
             if let end = keepAwake.endDate {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(KeepAwakeManager.remainingText(until: end, now: context.date))
@@ -88,7 +88,7 @@ struct DashboardView: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                .help(tr("Keep-awake mode is on", "Режим «не спать» включён"))
+                .hoverHint(tr("Anti-sleep is on", "Антисон включён"))
             }
             Button(action: onKeepAwakePickerToggle) {
                 TabletIcon(color: keepAwake.isActive ? .orange : .white.opacity(0.75))
@@ -97,7 +97,7 @@ struct DashboardView: View {
                     .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
-            .help(tr("Anti-sleep", "Антисон"))
+            .hoverHint(tr("Anti-sleep", "Антисон"))
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 12, weight: .semibold))
@@ -111,9 +111,10 @@ struct DashboardView: View {
                     }
             }
             .buttonStyle(.plain)
-            .help(tr("Settings", "Настройки"))
+            .hoverHint(tr("Settings", "Настройки"))
         }
         .frame(height: notchSize.height)
+        .zIndex(1) // hint bubbles hang over the cards below
     }
 }
 
