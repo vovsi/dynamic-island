@@ -63,7 +63,7 @@ struct IslandRootView: View {
 
 // MARK: - Event alert
 
-/// Collapsed-island signal for a schedule event: pulsing red warning on the left, blue schedule icon on the right.
+/// Collapsed-island signal for a schedule event: pulsing red dot on the left, blue schedule icon on the right.
 /// On hover the right icon turns into a close button that dismisses the current alert.
 private struct EventAlertIndicator: View {
     let sideWidth: CGFloat
@@ -77,8 +77,9 @@ private struct EventAlertIndicator: View {
         HStack(spacing: 0) {
             TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
                 let phase = context.date.timeIntervalSinceReferenceDate / Self.pulsePeriod * 2 * .pi
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
                     .opacity(0.3 + 0.7 * (0.5 + 0.5 * sin(phase)))
             }
             .frame(width: sideWidth)
