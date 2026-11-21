@@ -82,9 +82,8 @@ struct DashboardView: View {
                 .help(tr("Keep-awake mode is on", "Режим «не спать» включён"))
             }
             Button(action: onKeepAwakePickerToggle) {
-                Image(systemName: "pills.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(keepAwake.isActive ? .orange : .white.opacity(0.75))
+                TabletIcon(color: keepAwake.isActive ? .orange : .white.opacity(0.75))
+                    .frame(width: 11, height: 11)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
             }
@@ -111,6 +110,25 @@ struct DashboardView: View {
 
 // MARK: - Keep awake
 
+/// Round tablet with a score line across it.
+private struct TabletIcon: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Circle().fill(color)
+                Rectangle()
+                    .frame(width: proxy.size.width * 1.2, height: max(proxy.size.width * 0.14, 1.2))
+                    .rotationEffect(.degrees(-45))
+                    .blendMode(.destinationOut)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .compositingGroup()
+    }
+}
+
 /// Hour presets for the keep-awake mode, shown under the pill button.
 private struct KeepAwakePicker: View {
     @ObservedObject var manager: KeepAwakeManager
@@ -119,9 +137,8 @@ private struct KeepAwakePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "pills.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.orange)
+                TabletIcon(color: .orange)
+                    .frame(width: 10, height: 10)
                 Text(tr("Keep awake for", "Не спать в течение"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
