@@ -1,13 +1,23 @@
 import EventKit
 import SwiftUI
 
-/// Events from the macOS Calendar app (EventKit).
+/// Calendars and events from macOS (EventKit): local, iCloud and accounts added in
+/// System Settings → Internet Accounts (Google etc.).
 @MainActor
 final class MacCalendarSource {
     enum Access {
         case granted
         case notDetermined
         case denied
+    }
+
+    struct CalendarInfo {
+        let id: String
+        let title: String
+        let account: String
+        let color: Color
+        /// Google (or another third-party CalDAV) account — goes to the schedule by default.
+        let isRemoteAccount: Bool
     }
 
     private var store = EKEventStore()
@@ -27,30 +37,35 @@ final class MacCalendarSource {
         return granted
     }
 
-    func calendarOptions(excluded: Set<String>) -> [CalendarOption] {
-        store.calendars(for: .event)
-            .map {
-                CalendarOption(
-                    id: $0.calendarIdentifier,
-                    title: $0.title,
-                    group: $0.source?.title ?? "",
-                    color: Color(nsColor: $0.color),
-                    isEnabled: !excluded.contains($0.calendarIdentifier)
-                )
-            }
-            .sorted { ($0.group, $0.title) < ($1.group, $1.title) }
+    /// Asks EventKit to sync remote accounts; changes arrive via `EKEventStoreChanged`.
+    func syncRemoteSources() {
+        store.refreshSourcesIfNecessary()
     }
 
-    func events(from start: Date, to end: Date, excluded: Set<String>) -> [DayEvent] {
-        let calendars = store.calendars(for: .event).filter { !excluded.contains($0.calendarIdentifier) }
+    func calendars() -> [CalendarInfo] {
+        store.calendars(for: .event).map { calendar in
+            let source = calendar.source
+            return CalendarInfo(
+                id: calendar.calendarIdentifier,
+                title: calendar.title,
+                account: source?.title ?? "",
+                color: Color(nsColor: calendar.color),
+                isRemoteAccount: source.map(Self.isRemoteAccount) ?? false
+            )
+        }
+    }
+
+    func events(from start: Date, to end: Date, calendarIDs: Set<String>) -> [DayEvent] {
+        let calendars = store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
         guard !calendars.isEmpty else { return [] }
 
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
         return store.events(matching: predicate)
-            .filter { $0.status != .canceled }
+            .filter { $0.status != .canceled && !Self.isDeclined($0) }
             .map {
                 DayEvent(
                     id: "\($0.calendarItemIdentifier)|\($0.startDate.timeIntervalSince1970)",
+                    calendarID: $0.calendar.calendarIdentifier,
                     title: $0.title?.isEmpty == false ? $0.title : "(No title)",
                     start: $0.startDate,
                     end: $0.endDate,
@@ -59,5 +74,19 @@ final class MacCalendarSource {
                 )
             }
             .sorted(by: DayEvent.order)
+    }
+
+    private static func isDeclined(_ event: EKEvent) -> Bool {
+        event.attendees?.contains { $0.isCurrentUser && $0.participantStatus == .declined } ?? false
+    }
+
+    private static func isRemoteAccount(_ source: EKSource) -> Bool {
+        guard source.sourceType == .calDAV else { return false }
+        let title = source.title.lowercased()
+        if title.contains("google") || title.hasSuffix("gmail.com") || title.hasSuffix("googlemail.com") {
+            return true
+        }
+        let iCloud = title == "icloud" || ["icloud.com", "me.com", "mac.com"].contains { title.hasSuffix($0) }
+        return !iCloud
     }
 }

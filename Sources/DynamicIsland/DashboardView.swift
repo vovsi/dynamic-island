@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Expanded island: today's macOS Calendar events, today's Google Calendar schedule, settings button.
+/// Expanded island: today's events, today's schedule (Google account calendars), settings button.
 struct DashboardView: View {
     let notchSize: CGSize
     let horizontalInset: CGFloat
@@ -55,20 +55,13 @@ private struct EventsCard: View {
 
     var body: some View {
         Card(title: "Events", icon: "calendar", tint: .red, trailing: now.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))) {
-            switch store.macState {
-            case .notDetermined:
-                Placeholder(text: "Calendar access is required.", action: "Allow Access") {
-                    Task { await store.requestMacAccess() }
-                }
-            case .denied:
-                Placeholder(text: "Calendar access is denied.", action: "Open Settings", perform: onOpenSettings)
-            case .ready:
-                if store.macEvents.isEmpty {
-                    Placeholder(text: "No events today.")
-                } else {
-                    EventList(events: store.macEvents, now: now) { event in
-                        EventRow(event: event, now: now)
-                    }
+            if let placeholder = AccessPlaceholder(store: store, onOpenSettings: onOpenSettings) {
+                placeholder
+            } else if store.events.isEmpty {
+                Placeholder(text: "No events today.")
+            } else {
+                EventList(events: store.events, now: now) { event in
+                    EventRow(event: event, now: now)
                 }
             }
         }
@@ -82,21 +75,40 @@ private struct ScheduleCard: View {
 
     var body: some View {
         Card(title: "Schedule", icon: "clock", tint: .blue, trailing: nil) {
-            switch store.googleState {
-            case .notConfigured, .disconnected:
-                Placeholder(text: "Connect Google Calendar.", action: "Open Settings", perform: onOpenSettings)
-            case .failed(let message) where store.googleEvents.isEmpty:
-                Placeholder(text: message, isError: true, action: "Open Settings", perform: onOpenSettings)
-            case .ready, .failed:
-                if store.googleEvents.isEmpty {
-                    Placeholder(text: "Nothing scheduled today.")
-                } else {
-                    let next = store.googleEvents.first { !$0.isAllDay && $0.start > now }?.id
-                    EventList(events: store.googleEvents, now: now) { event in
-                        ScheduleRow(event: event, now: now, isNext: event.id == next)
-                    }
+            if let placeholder = AccessPlaceholder(store: store, onOpenSettings: onOpenSettings) {
+                placeholder
+            } else if !store.hasScheduleCalendars {
+                Placeholder(text: "Connect your Google account.", action: "Connect", perform: store.openInternetAccounts)
+            } else if store.schedule.isEmpty {
+                Placeholder(text: "Nothing scheduled today.")
+            } else {
+                let next = store.schedule.first { !$0.isAllDay && $0.start > now }?.id
+                EventList(events: store.schedule, now: now) { event in
+                    ScheduleRow(event: event, now: now, isNext: event.id == next)
                 }
             }
+        }
+    }
+}
+
+/// Shown instead of a card's content while calendar access is not granted.
+private struct AccessPlaceholder: View {
+    @ObservedObject var store: CalendarStore
+    let onOpenSettings: () -> Void
+
+    init?(store: CalendarStore, onOpenSettings: @escaping () -> Void) {
+        guard store.access != .ready else { return nil }
+        self.store = store
+        self.onOpenSettings = onOpenSettings
+    }
+
+    var body: some View {
+        if store.access == .notDetermined {
+            Placeholder(text: "Calendar access is required.", action: "Allow Access") {
+                Task { await store.requestAccess() }
+            }
+        } else {
+            Placeholder(text: "Calendar access is denied.", action: "Open Settings", perform: store.openPrivacySettings)
         }
     }
 }
@@ -142,7 +154,6 @@ private struct Card<Content: View>: View {
 
 private struct Placeholder: View {
     let text: String
-    var isError = false
     var action: String?
     var perform: () -> Void = {}
 
@@ -150,7 +161,7 @@ private struct Placeholder: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isError ? Color.orange : .white.opacity(0.45))
+                .foregroundStyle(.white.opacity(0.45))
                 .lineLimit(3)
             if let action {
                 Button(action: perform) {

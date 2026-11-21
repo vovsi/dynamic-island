@@ -53,8 +53,7 @@ struct SettingsView: View {
                 Toggle("Haptic feedback", isOn: $hapticFeedback)
             }
 
-            macCalendarSection
-            googleCalendarSection
+            calendarSections
 
             Section("Refresh") {
                 LabeledContent("Last updated") {
@@ -69,10 +68,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Refresh Now") {
-                        Task { await calendars.refresh() }
-                    }
-                    .disabled(calendars.isRefreshing)
+                    Button("Refresh Now") { calendars.refresh() }
                 }
             }
 
@@ -136,105 +132,59 @@ struct SettingsView: View {
     // MARK: - Calendars
 
     @ViewBuilder
-    private var macCalendarSection: some View {
-        Section("macOS Calendar — Events") {
-            switch calendars.macState {
+    private var calendarSections: some View {
+        Section("Calendars") {
+            switch calendars.access {
             case .notDetermined:
                 HStack {
                     Text("Access to Calendar is required.")
                     Spacer()
-                    Button("Allow Access") { Task { await calendars.requestMacAccess() } }
+                    Button("Allow Access") { Task { await calendars.requestAccess() } }
                 }
             case .denied:
                 HStack {
                     Text("Access to Calendar is denied.")
                         .foregroundStyle(.orange)
                     Spacer()
-                    Button("Open Privacy Settings") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
+                    Button("Open Privacy Settings") { calendars.openPrivacySettings() }
                 }
             case .ready:
-                if calendars.macCalendars.isEmpty {
-                    Text("No calendars found.").foregroundStyle(.secondary)
-                }
-                ForEach(calendars.macCalendars) { option in
-                    calendarToggle(option) { calendars.setMacCalendar(option.id, enabled: $0) }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var googleCalendarSection: some View {
-        Section("Google Calendar — Schedule") {
-            if calendars.isGoogleConnected {
                 HStack {
-                    Label(calendars.googleAccount ?? "Connected", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    Text(calendars.hasScheduleCalendars ? "Google account connected." : "Google account is not connected.")
+                        .foregroundStyle(calendars.hasScheduleCalendars ? Color.secondary : Color.orange)
                     Spacer()
-                    Button("Disconnect") { Task { await calendars.signOutOfGoogle() } }
-                }
-                if case .failed(let message) = calendars.googleState {
-                    Text(message).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
-                }
-                ForEach(calendars.googleCalendars) { option in
-                    calendarToggle(option) { calendars.setGoogleCalendar(option.id, enabled: $0) }
-                }
-            } else {
-                TextField("Client ID", text: $state.googleClientID)
-                SecureField("Client Secret", text: $state.googleClientSecret)
-                HStack {
-                    if calendars.isGoogleSigningIn {
-                        ProgressView().controlSize(.small)
-                        Text("Waiting for sign-in in the browser…")
-                        Spacer()
-                        Button("Cancel") { calendars.cancelGoogleSignIn() }
-                    } else {
-                        Spacer()
-                        Button("Connect Google Calendar") {
-                            Task {
-                                await calendars.signInToGoogle(
-                                    clientID: state.googleClientID,
-                                    clientSecret: state.googleClientSecret
-                                )
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(state.googleClientID.isEmpty || state.googleClientSecret.isEmpty)
+                    Button(calendars.hasScheduleCalendars ? "Add Account…" : "Connect Google…") {
+                        calendars.openInternetAccounts()
                     }
                 }
-                if let error = calendars.googleSignInError ?? failedGoogleMessage {
-                    Text(error).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
-                }
-                Text("Google Cloud Console → enable Google Calendar API → OAuth client ID of type “Desktop app”.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            Text("Credentials and tokens are stored locally in \(LocalConfigStore.fileURL.path).")
+            Text("Google is connected through System Settings → Internet Accounts → Google (enable Calendars). How often macOS syncs it is set in Calendar → Settings → Accounts.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .textSelection(.enabled)
         }
-    }
 
-    private var failedGoogleMessage: String? {
-        if case .failed(let message) = calendars.googleState { return message }
-        return nil
-    }
-
-    private func calendarToggle(_ option: CalendarOption, set: @escaping (Bool) -> Void) -> some View {
-        Toggle(isOn: Binding(get: { option.isEnabled }, set: set)) {
-            HStack(spacing: 6) {
-                Circle().fill(option.color).frame(width: 8, height: 8)
-                Text(option.title)
-                if !option.group.isEmpty {
-                    Text(option.group).foregroundStyle(.secondary)
+        ForEach(accounts, id: \.self) { account in
+            Section(account.isEmpty ? "Other" : account) {
+                ForEach(calendars.calendars.filter { $0.account == account }) { option in
+                    Picker(selection: Binding(
+                        get: { option.block },
+                        set: { calendars.setBlock($0, for: option.id) }
+                    )) {
+                        ForEach(CalendarBlock.allCases) { Text($0.title).tag($0) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(option.color).frame(width: 8, height: 8)
+                            Text(option.title)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var accounts: [String] {
+        var seen = Set<String>()
+        return calendars.calendars.map(\.account).filter { seen.insert($0).inserted }
     }
 
     @ViewBuilder
@@ -273,8 +223,6 @@ private final class SettingsState: ObservableObject {
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var loginItemError: String?
     @Published var showLog = false
-    @Published var googleClientID = LocalConfigStore.current.google.clientID
-    @Published var googleClientSecret = LocalConfigStore.current.google.clientSecret
 
     func setLaunchAtLogin(_ enabled: Bool) {
         do {

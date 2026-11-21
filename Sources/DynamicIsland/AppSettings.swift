@@ -17,11 +17,14 @@ enum AppSettings {
     static var hapticFeedback: Bool { UserDefaults.standard.bool(forKey: hapticFeedbackKey) }
     static var autoCheckUpdates: Bool { UserDefaults.standard.bool(forKey: autoCheckUpdatesKey) }
 
-    /// macOS calendars hidden from the island (EventKit calendar identifiers).
-    static var excludedMacCalendarIDs: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: excludedMacCalendarIDsKey) ?? []) }
-        set { UserDefaults.standard.set(newValue.sorted(), forKey: excludedMacCalendarIDsKey) }
+    /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).
+    static var calendarBlocks: [String: CalendarBlock] {
+        get {
+            let raw = UserDefaults.standard.dictionary(forKey: calendarBlocksKey) as? [String: String] ?? [:]
+            return raw.compactMapValues(CalendarBlock.init(rawValue:))
+        }
+        set { UserDefaults.standard.set(newValue.mapValues(\.rawValue), forKey: calendarBlocksKey) }
     }
 
-    private static let excludedMacCalendarIDsKey = "excludedMacCalendarIDs"
+    private static let calendarBlocksKey = "calendarBlocks"
 }

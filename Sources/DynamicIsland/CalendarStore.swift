@@ -2,45 +2,36 @@ import AppKit
 import EventKit
 import SwiftUI
 
-/// Today's events from macOS Calendar and Google Calendar, refreshed in the background.
+/// Today's events split into the island's "Events" and "Schedule" blocks, refreshed in the background.
 @MainActor
 final class CalendarStore: ObservableObject {
     static let shared = CalendarStore()
     static let refreshInterval: TimeInterval = 5 * 60
 
-    enum MacState: Equatable {
+    private static let internetAccountsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension"
+    )!
+    private static let calendarPrivacyURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
+    )!
+
+    enum AccessState: Equatable {
         case ready
         case notDetermined
         case denied
     }
 
-    enum GoogleState: Equatable {
-        case ready
-        case notConfigured
-        case disconnected
-        case failed(String)
-    }
-
-    @Published private(set) var macState: MacState = .notDetermined
-    @Published private(set) var macEvents: [DayEvent] = []
-    @Published private(set) var macCalendars: [CalendarOption] = []
-
-    @Published private(set) var googleState: GoogleState = .notConfigured
-    @Published private(set) var googleEvents: [DayEvent] = []
-    @Published private(set) var googleCalendars: [CalendarOption] = []
-    @Published private(set) var googleAccount: String?
-    @Published private(set) var isGoogleSigningIn = false
-    @Published private(set) var googleSignInError: String?
-
+    @Published private(set) var access: AccessState = .notDetermined
+    @Published private(set) var events: [DayEvent] = []
+    @Published private(set) var schedule: [DayEvent] = []
+    @Published private(set) var calendars: [CalendarOption] = []
     @Published private(set) var lastRefresh: Date?
-    @Published private(set) var isRefreshing = false
 
-    private let mac = MacCalendarSource()
-    private let google = GoogleCalendarClient()
+    private let source = MacCalendarSource()
     private var timer: Timer?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
 
-    var isGoogleConnected: Bool { google.isConnected }
+    var hasScheduleCalendars: Bool { calendars.contains { $0.block == .schedule } }
 
     // MARK: - Lifecycle
 
@@ -48,19 +39,17 @@ final class CalendarStore: ObservableObject {
         guard timer == nil else { return }
 
         let timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { _ in
-            Task { @MainActor in await CalendarStore.shared.refresh() }
+            MainActor.assumeIsolated { CalendarStore.shared.refresh() }
         }
         timer.tolerance = 30
         self.timer = timer
 
-        observe(NotificationCenter.default, .EKEventStoreChanged) { $0.refreshMac() }
-        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.didWakeNotification) { store in
-            Task { await store.refresh() }
-        }
+        observe(NotificationCenter.default, .EKEventStoreChanged) { $0.reload() }
+        observe(NSWorkspace.shared.notificationCenter, NSWorkspace.didWakeNotification) { $0.refresh() }
 
         Task {
-            if mac.access == .notDetermined { _ = await mac.requestAccess() }
-            await refresh()
+            if source.access == .notDetermined { _ = await source.requestAccess() }
+            refresh()
         }
     }
 
@@ -73,126 +62,70 @@ final class CalendarStore: ObservableObject {
 
     // MARK: - Refresh
 
-    func refresh() async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        refreshMac()
-        await refreshGoogle()
-        lastRefresh = Date()
-        isRefreshing = false
+    /// Syncs remote accounts and reloads today's events.
+    func refresh() {
+        if source.access == .granted { source.syncRemoteSources() }
+        reload()
     }
 
-    func refreshMac() {
-        switch mac.access {
-        case .granted: macState = .ready
-        case .notDetermined: macState = .notDetermined
-        case .denied: macState = .denied
+    private func reload() {
+        switch source.access {
+        case .granted: access = .ready
+        case .notDetermined: access = .notDetermined
+        case .denied: access = .denied
         }
-        guard macState == .ready else {
-            macEvents = []
-            macCalendars = []
-            return
-        }
-        let excluded = AppSettings.excludedMacCalendarIDs
-        let today = DayEvent.todayRange()
-        macCalendars = mac.calendarOptions(excluded: excluded)
-        macEvents = mac.events(from: today.start, to: today.end, excluded: excluded)
-    }
-
-    func refreshGoogle() async {
-        guard google.hasCredentials else {
-            clearGoogle(state: .notConfigured)
-            return
-        }
-        guard google.isConnected else {
-            clearGoogle(state: .disconnected)
+        guard access == .ready else {
+            events = []
+            schedule = []
+            calendars = []
             return
         }
 
-        do {
-            let calendars = try await google.calendarList()
-            let selected = LocalConfigStore.current.google.calendarIDs.map(Set.init)
-                ?? Set(calendars.filter { $0.isPrimary || $0.isVisibleInGoogle }.map(\.id))
-
-            googleAccount = calendars.first(where: \.isPrimary)?.id
-            googleCalendars = calendars.map {
-                CalendarOption(id: $0.id, title: $0.title, group: "", color: $0.color, isEnabled: selected.contains($0.id))
+        let overrides = AppSettings.calendarBlocks
+        calendars = source.calendars()
+            .map {
+                CalendarOption(
+                    id: $0.id,
+                    title: $0.title,
+                    account: $0.account,
+                    color: $0.color,
+                    block: overrides[$0.id] ?? ($0.isRemoteAccount ? .schedule : .events)
+                )
             }
+            .sorted { ($0.account, $0.title) < ($1.account, $1.title) }
 
-            let today = DayEvent.todayRange()
-            googleEvents = try await google.events(
-                in: calendars.filter { selected.contains($0.id) },
-                from: today.start,
-                to: today.end
-            )
-            googleState = .ready
-        } catch is GoogleAuthExpired {
-            clearGoogle(state: .failed(GoogleAuthExpired().localizedDescription))
-        } catch {
-            // Keep the last successful events; network hiccups should not blank the schedule.
-            googleState = .failed(error.localizedDescription)
-        }
+        let blocks = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0.block) })
+        let today = DayEvent.todayRange()
+        let all = source.events(
+            from: today.start,
+            to: today.end,
+            calendarIDs: Set(calendars.filter { $0.block != .hidden }.map(\.id))
+        )
+        events = all.filter { blocks[$0.calendarID] == .events }
+        schedule = all.filter { blocks[$0.calendarID] == .schedule }
+        lastRefresh = Date()
     }
 
-    private func clearGoogle(state: GoogleState) {
-        googleState = state
-        googleEvents = []
-        googleCalendars = []
-        googleAccount = nil
+    // MARK: - Actions
+
+    func requestAccess() async {
+        _ = await source.requestAccess()
+        refresh()
     }
 
-    // MARK: - macOS Calendar
-
-    func requestMacAccess() async {
-        _ = await mac.requestAccess()
-        refreshMac()
+    func setBlock(_ block: CalendarBlock, for calendarID: String) {
+        var overrides = AppSettings.calendarBlocks
+        overrides[calendarID] = block
+        AppSettings.calendarBlocks = overrides
+        reload()
     }
 
-    func setMacCalendar(_ id: String, enabled: Bool) {
-        var excluded = AppSettings.excludedMacCalendarIDs
-        if enabled { excluded.remove(id) } else { excluded.insert(id) }
-        AppSettings.excludedMacCalendarIDs = excluded
-        refreshMac()
+    /// Google is connected through System Settings → Internet Accounts; EventKit picks it up automatically.
+    func openInternetAccounts() {
+        NSWorkspace.shared.open(Self.internetAccountsURL)
     }
 
-    // MARK: - Google Calendar
-
-    func signInToGoogle(clientID: String, clientSecret: String) async {
-        LocalConfigStore.update {
-            $0.google.clientID = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-            $0.google.clientSecret = clientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        isGoogleSigningIn = true
-        googleSignInError = nil
-        do {
-            try await google.signIn()
-        } catch is CancellationError {
-        } catch {
-            googleSignInError = error.localizedDescription
-        }
-        isGoogleSigningIn = false
-        await refreshGoogle()
-    }
-
-    func cancelGoogleSignIn() {
-        google.cancelSignIn()
-    }
-
-    func signOutOfGoogle() async {
-        await google.signOut()
-        googleSignInError = nil
-        await refreshGoogle()
-    }
-
-    func setGoogleCalendar(_ id: String, enabled: Bool) {
-        var ids = Set(googleCalendars.filter(\.isEnabled).map(\.id))
-        if enabled { ids.insert(id) } else { ids.remove(id) }
-        LocalConfigStore.update { $0.google.calendarIDs = ids.sorted() }
-        googleCalendars = googleCalendars.map {
-            var option = $0
-            option.isEnabled = ids.contains($0.id)
-            return option
-        }
-        Task { await refreshGoogle() }
+    func openPrivacySettings() {
+        NSWorkspace.shared.open(Self.calendarPrivacyURL)
     }
 }

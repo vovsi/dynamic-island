@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DayEvent: Identifiable, Equatable {
     let id: String
+    let calendarID: String
     let title: String
     let start: Date
     let end: Date
@@ -26,23 +27,27 @@ struct DayEvent: Identifiable, Equatable {
     }
 }
 
+/// Island block a calendar is shown in.
+enum CalendarBlock: String, CaseIterable, Identifiable {
+    case events
+    case schedule
+    case hidden
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .events: return "Events"
+        case .schedule: return "Schedule"
+        case .hidden: return "Hidden"
+        }
+    }
+}
+
 struct CalendarOption: Identifiable, Equatable {
     let id: String
     let title: String
-    let group: String
+    let account: String
     let color: Color
-    var isEnabled: Bool
-}
-
-extension Color {
-    init?(hex: String) {
-        var value = hex.trimmingCharacters(in: .whitespaces)
-        if value.hasPrefix("#") { value.removeFirst() }
-        guard value.count == 6, let rgb = UInt32(value, radix: 16) else { return nil }
-        self.init(
-            red: Double((rgb >> 16) & 0xFF) / 255,
-            green: Double((rgb >> 8) & 0xFF) / 255,
-            blue: Double(rgb & 0xFF) / 255
-        )
-    }
+    var block: CalendarBlock
 }

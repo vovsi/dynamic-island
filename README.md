@@ -1,6 +1,6 @@
 # Dynamic Island for macOS
 
-Turns the MacBook notch into an iPhone‑style Dynamic Island. Click the notch to expand it: today's events from macOS Calendar, today's schedule from Google Calendar and a settings button; click outside (or move the cursor away) to collapse. Right‑click the island for quick actions. The app has no Dock icon and no menu bar item.
+Turns the MacBook notch into an iPhone‑style Dynamic Island. Click the notch to expand it: today's events, today's schedule (Google account calendars) and a settings button; click outside (or move the cursor away) to collapse. Right‑click the island for quick actions. The app has no Dock icon and no menu bar item.
 
 ## Requirements
 
@@ -17,14 +17,16 @@ Builds `build/DynamicIsland.app`, installs it to `/Applications` (or `~/Applicat
 
 ## Calendars
 
-Both calendars refresh every 5 minutes in the background (and on wake / Calendar changes).
+Everything comes from macOS Calendar (EventKit) — no API keys or tokens in the app.
 
-- **macOS Calendar** — grant access on first launch; choose calendars in Settings → macOS Calendar.
-- **Google Calendar** — in [Google Cloud Console](https://console.cloud.google.com/): enable *Google Calendar API*, configure the OAuth consent screen (add yourself as a test user, or publish the app — in *Testing* mode refresh tokens expire after 7 days), create an OAuth client ID of type **Desktop app**. Paste Client ID / Client Secret into Settings → Google Calendar → **Connect**, sign in in the browser.
+- Grant Calendar access on first launch.
+- Google: Settings → **Connect Google…** (or **Connect** on the island) opens System Settings → Internet Accounts → sign in to Google with Calendars enabled.
+- Calendars of Google (and other non‑iCloud CalDAV) accounts go to **Schedule**, the rest to **Events**; any calendar can be moved or hidden in Settings.
+- The island refreshes every 5 minutes in the background (also on wake and on Calendar changes). How often macOS syncs Google is set in Calendar → Settings → Accounts.
 
 ## Local config and secrets
 
-Credentials, tokens and calendar selection are stored outside the repository in `~/Library/Application Support/DynamicIsland/config.json` (directory `0700`, file `0600`). Never commit configs or secrets.
+Never commit configs or secrets. Preferences live in `UserDefaults`; anything sensitive goes to `~/Library/Application Support/DynamicIsland/` (directory `0700`, files `0600`) or the Keychain.
 
 ## Updates
 
@@ -35,9 +37,7 @@ Settings → Updates → **Check for Updates** compares the commit the app was b
 - `Sources/DynamicIsland/IslandController.swift` — panel above the menu bar, mouse tracking, expand/collapse.
 - `Sources/DynamicIsland/NotchShape.swift` — animatable notch silhouette.
 - `Sources/DynamicIsland/DashboardView.swift` — expanded island: events, schedule, settings button.
-- `Sources/DynamicIsland/CalendarStore.swift` — background refresh of both calendars.
+- `Sources/DynamicIsland/CalendarStore.swift` — background refresh, split into Events / Schedule.
 - `Sources/DynamicIsland/MacCalendarSource.swift` — EventKit.
-- `Sources/DynamicIsland/GoogleCalendarClient.swift`, `LoopbackServer.swift` — Google OAuth (loopback + PKCE) and Calendar API.
-- `Sources/DynamicIsland/LocalConfig.swift` — local config/secrets storage outside git.
 - `Sources/DynamicIsland/UpdateManager.swift`, `scripts/self-update.sh` — git‑based updater.
 - `Sources/DynamicIsland/SettingsView.swift` — settings window.
