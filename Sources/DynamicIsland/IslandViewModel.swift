@@ -18,7 +18,7 @@ final class IslandViewModel: ObservableObject {
     // MARK: - Geometry
 
     static let expandedWidth: CGFloat = 680
-    static let expandedContentHeight: CGFloat = 136
+    static let expandedContentHeight: CGFloat = 200
     static let hoverGrowth = CGSize(width: 18, height: 4)
 
     var isExpanded: Bool { state == .expanded }

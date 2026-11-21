@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         islandController = controller
 
+        CalendarStore.shared.start()
         UpdateManager.shared.startAutoCheck()
     }
 

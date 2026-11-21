@@ -26,6 +26,10 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Dynamic Island shows today's events from your calendars.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Dynamic Island shows today's events from your calendars.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>DIGitCommit</key>

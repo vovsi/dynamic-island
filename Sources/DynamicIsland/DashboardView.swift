@@ -1,214 +1,134 @@
 import SwiftUI
 
-// MARK: - Mock data
-
-struct Metric: Identifiable {
-    enum Kind { case currency, count, percent }
-
-    let id: String
-    let title: String
-    let icon: String
-    let tint: Color
-    let kind: Kind
-    var values: [Double]
-
-    var current: Double { values.last ?? 0 }
-
-    var delta: Double {
-        guard let first = values.first, first != 0 else { return 0 }
-        return (current - first) / first * 100
-    }
-
-    var formattedValue: String {
-        switch kind {
-        case .currency:
-            return current >= 1000
-                ? String(format: "$%.1fK", current / 1000)
-                : String(format: "$%.0f", current)
-        case .count:
-            return Int(current).formatted(.number.locale(Locale(identifier: "en_US")))
-        case .percent:
-            return String(format: "%.2f%%", current)
-        }
-    }
-
-    var formattedDelta: String {
-        String(format: "%@%.1f%%", delta >= 0 ? "+" : "", delta)
-    }
-}
-
-/// Placeholder metrics with a random walk so the dashboard feels alive.
-@MainActor
-final class DashboardModel: ObservableObject {
-    @Published var metrics: [Metric] = [
-        Metric(id: "revenue", title: "Revenue", icon: "dollarsign.circle.fill", tint: .green,
-               kind: .currency, values: DashboardModel.seed(base: 12_400, spread: 900)),
-        Metric(id: "users", title: "Active Users", icon: "person.2.fill", tint: .blue,
-               kind: .count, values: DashboardModel.seed(base: 1_284, spread: 120)),
-        Metric(id: "orders", title: "Orders", icon: "cart.fill", tint: .orange,
-               kind: .count, values: DashboardModel.seed(base: 342, spread: 30)),
-        Metric(id: "conversion", title: "Conversion", icon: "chart.line.uptrend.xyaxis", tint: .purple,
-               kind: .percent, values: DashboardModel.seed(base: 3.6, spread: 0.4)),
-    ]
-
-    private var timer: Timer?
-
-    func start() {
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func tick() {
-        withAnimation(.smooth(duration: 0.5)) {
-            for index in metrics.indices {
-                let last = metrics[index].current
-                let next = max(0, last * (1 + Double.random(in: -0.035...0.04)))
-                metrics[index].values.removeFirst()
-                metrics[index].values.append(next)
-            }
-        }
-    }
-
-    private static func seed(base: Double, spread: Double, count: Int = 24) -> [Double] {
-        var value = base - spread
-        return (0..<count).map { _ in
-            value += Double.random(in: -spread / 6...spread / 4)
-            return max(0, value)
-        }
-    }
-}
-
-// MARK: - Views
-
+/// Expanded island: today's macOS Calendar events, today's Google Calendar schedule, settings button.
 struct DashboardView: View {
     let notchSize: CGSize
     let horizontalInset: CGFloat
     let updateAvailable: Bool
     let onOpenSettings: () -> Void
 
-    @StateObject private var model = DashboardModel()
+    @ObservedObject private var store = CalendarStore.shared
 
     var body: some View {
         VStack(spacing: 10) {
             header
-            HStack(spacing: 10) {
-                ForEach(model.metrics) { metric in
-                    MetricCard(metric: metric)
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                HStack(alignment: .top, spacing: 10) {
+                    EventsCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
+                    ScheduleCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
                 }
             }
         }
         .padding(.horizontal, horizontalInset)
         .padding(.bottom, 16)
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
     }
 
-    /// Top row sits beside the camera housing: content left and right of the notch.
+    /// Top row sits beside the camera housing.
     private var header: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                Text("Dashboard")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                LiveBadge()
-            }
-
-            Spacer(minLength: notchSize.width + 24)
-
-            HStack(spacing: 10) {
-                if updateAvailable {
-                    Button(action: onOpenSettings) {
-                        Label("Update", systemImage: "arrow.down.circle.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.accentColor))
-                            .foregroundStyle(.white)
+        HStack {
+            Spacer(minLength: 0)
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(.white.opacity(0.1)))
+                    .overlay(alignment: .topTrailing) {
+                        if updateAvailable {
+                            Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+                        }
                     }
-                    .buttonStyle(.plain)
-                }
-
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(context.date, format: .dateTime.hour().minute())
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(.white.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-                .help("Settings")
             }
+            .buttonStyle(.plain)
+            .help(updateAvailable ? "Settings — update available" : "Settings")
         }
         .frame(height: notchSize.height)
     }
 }
 
-private struct LiveBadge: View {
+// MARK: - Cards
+
+private struct EventsCard: View {
+    @ObservedObject var store: CalendarStore
+    let now: Date
+    let onOpenSettings: () -> Void
+
     var body: some View {
-        HStack(spacing: 4) {
-            PhaseAnimator([1.0, 0.3]) { opacity in
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
-                    .opacity(opacity)
-            } animation: { _ in
-                .easeInOut(duration: 0.9)
+        Card(title: "Events", icon: "calendar", tint: .red, trailing: now.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))) {
+            switch store.macState {
+            case .notDetermined:
+                Placeholder(text: "Calendar access is required.", action: "Allow Access") {
+                    Task { await store.requestMacAccess() }
+                }
+            case .denied:
+                Placeholder(text: "Calendar access is denied.", action: "Open Settings", perform: onOpenSettings)
+            case .ready:
+                if store.macEvents.isEmpty {
+                    Placeholder(text: "No events today.")
+                } else {
+                    EventList(events: store.macEvents, now: now) { event in
+                        EventRow(event: event, now: now)
+                    }
+                }
             }
-            Text("LIVE")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.green)
         }
     }
 }
 
-private struct MetricCard: View {
-    let metric: Metric
+private struct ScheduleCard: View {
+    @ObservedObject var store: CalendarStore
+    let now: Date
+    let onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: metric.icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(metric.tint)
-                Text(metric.title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
+        Card(title: "Schedule", icon: "clock", tint: .blue, trailing: nil) {
+            switch store.googleState {
+            case .notConfigured, .disconnected:
+                Placeholder(text: "Connect Google Calendar.", action: "Open Settings", perform: onOpenSettings)
+            case .failed(let message) where store.googleEvents.isEmpty:
+                Placeholder(text: message, isError: true, action: "Open Settings", perform: onOpenSettings)
+            case .ready, .failed:
+                if store.googleEvents.isEmpty {
+                    Placeholder(text: "Nothing scheduled today.")
+                } else {
+                    let next = store.googleEvents.first { !$0.isAllDay && $0.start > now }?.id
+                    EventList(events: store.googleEvents, now: now) { event in
+                        ScheduleRow(event: event, now: now, isNext: event.id == next)
+                    }
+                }
             }
+        }
+    }
+}
 
-            Text(metric.formattedValue)
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .contentTransition(.numericText())
+private struct Card<Content: View>: View {
+    let title: String
+    let icon: String
+    let tint: Color
+    let trailing: String?
+    @ViewBuilder let content: Content
 
-            Text(metric.formattedDelta)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(metric.delta >= 0 ? Color.green : Color.red)
-
-            Sparkline(values: metric.values, tint: metric.tint)
-                .frame(height: 26)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer(minLength: 4)
+                if let trailing {
+                    Text(trailing)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.white.opacity(0.07))
@@ -220,42 +140,143 @@ private struct MetricCard: View {
     }
 }
 
-private struct Sparkline: View {
-    let values: [Double]
-    let tint: Color
+private struct Placeholder: View {
+    let text: String
+    var isError = false
+    var action: String?
+    var perform: () -> Void = {}
 
     var body: some View {
-        GeometryReader { geo in
-            let points = normalizedPoints(in: geo.size)
-            ZStack {
-                Path { path in
-                    guard let first = points.first else { return }
-                    path.move(to: CGPoint(x: first.x, y: geo.size.height))
-                    points.forEach { path.addLine(to: $0) }
-                    path.addLine(to: CGPoint(x: points.last?.x ?? 0, y: geo.size.height))
-                    path.closeSubpath()
+        VStack(alignment: .leading, spacing: 8) {
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isError ? Color.orange : .white.opacity(0.45))
+                .lineLimit(3)
+            if let action {
+                Button(action: perform) {
+                    Text(action)
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.white.opacity(0.14)))
+                        .foregroundStyle(.white)
                 }
-                .fill(LinearGradient(colors: [tint.opacity(0.35), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
-
-                Path { path in
-                    guard let first = points.first else { return }
-                    path.move(to: first)
-                    points.dropFirst().forEach { path.addLine(to: $0) }
-                }
-                .stroke(tint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                .buttonStyle(.plain)
             }
         }
     }
+}
 
-    private func normalizedPoints(in size: CGSize) -> [CGPoint] {
-        guard values.count > 1, let lo = values.min(), let hi = values.max() else { return [] }
-        let range = max(hi - lo, .ulpOfOne)
-        let step = size.width / CGFloat(values.count - 1)
-        return values.enumerated().map { index, value in
-            CGPoint(
-                x: CGFloat(index) * step,
-                y: size.height - CGFloat((value - lo) / range) * (size.height - 2) - 1
-            )
+/// Scrollable list that starts at the first event that has not ended yet.
+private struct EventList<Row: View>: View {
+    let events: [DayEvent]
+    let now: Date
+    @ViewBuilder let row: (DayEvent) -> Row
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(events) { row($0).id($0.id) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .onAppear {
+                if let focus = events.first(where: { !$0.isAllDay && !$0.hasEnded(at: now) }) {
+                    proxy.scrollTo(focus.id, anchor: .top)
+                }
+            }
         }
+    }
+}
+
+// MARK: - Rows
+
+private func timeText(_ date: Date) -> String {
+    date.formatted(date: .omitted, time: .shortened)
+}
+
+private struct EventRow: View {
+    let event: DayEvent
+    let now: Date
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Capsule()
+                .fill(event.color)
+                .frame(width: 3, height: 14)
+            Text(event.isAllDay ? "All day" : "\(timeText(event.start))–\(timeText(event.end))")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+                .fixedSize()
+            Text(event.title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .opacity(event.hasEnded(at: now) ? 0.4 : 1)
+    }
+}
+
+private struct ScheduleRow: View {
+    let event: DayEvent
+    let now: Date
+    let isNext: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(event.isAllDay ? "All day" : timeText(event.start))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .frame(minWidth: 40, alignment: .leading)
+                .fixedSize()
+            Capsule()
+                .fill(event.color)
+                .frame(width: 3, height: 14)
+            Text(event.title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            badge
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(isOngoing ? Color.green.opacity(0.14) : .clear)
+        )
+        .opacity(!event.isAllDay && event.hasEnded(at: now) ? 0.4 : 1)
+    }
+
+    private var isOngoing: Bool { !event.isAllDay && event.isOngoing(at: now) }
+
+    @ViewBuilder
+    private var badge: some View {
+        if isOngoing {
+            Text("Now")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.green)
+        } else if isNext {
+            Text(Self.relative(from: now, to: event.start))
+                .font(.system(size: 9, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Color.accentColor)
+        } else if !event.isAllDay {
+            Text(timeText(event.end))
+                .font(.system(size: 9, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.35))
+        }
+    }
+
+    static func relative(from now: Date, to date: Date) -> String {
+        let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
+        if minutes < 60 { return "in \(minutes) min" }
+        let hours = minutes / 60, rest = minutes % 60
+        return rest == 0 ? "in \(hours) h" : "in \(hours) h \(rest) min"
     }
 }

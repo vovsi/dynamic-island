@@ -2,3 +2,14 @@
 build/
 .DS_Store
 .swiftpm/
+
+# Local configs and secrets are never committed.
+# Runtime config lives in ~/Library/Application Support/DynamicIsland/config.json.
+.env
+.env.*
+*.local.json
+config.json
+secrets/
+client_secret*.json
+*.p12
+*.pem
