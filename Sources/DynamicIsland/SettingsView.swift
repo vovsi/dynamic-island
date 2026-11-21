@@ -31,6 +31,7 @@ final class SettingsWindowController {
 struct SettingsView: View {
     @ObservedObject private var updates = UpdateManager.shared
     @ObservedObject private var calendars = CalendarStore.shared
+    @ObservedObject private var weather = WeatherStore.shared
 
     @AppStorage(AppSettings.collapseOnMouseExitKey) private var collapseOnMouseExit = true
     @AppStorage(AppSettings.hapticFeedbackKey) private var hapticFeedback = true
@@ -55,6 +56,8 @@ struct SettingsView: View {
             }
 
             calendarSections
+
+            weatherSection
 
             Section("Refresh") {
                 LabeledContent("Last updated") {
@@ -128,6 +131,44 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 520)
         .frame(minHeight: 600)
+    }
+
+    // MARK: - Weather
+
+    private var weatherSection: some View {
+        Section("Weather") {
+            HStack {
+                TextField("City", text: $state.weatherCity, prompt: Text("Current location"))
+                    .onSubmit { weather.setCity(state.weatherCity) }
+                Button("Save") { weather.setCity(state.weatherCity) }
+                    .disabled(state.weatherCity.trimmingCharacters(in: .whitespaces) == AppSettings.weatherCity)
+            }
+            switch weather.status {
+            case .needsLocation:
+                HStack {
+                    Text("Location access is denied. Enter a city or allow access.")
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Button("Open Privacy Settings") { weather.openLocationPrivacySettings() }
+                }
+            case .failed(let message):
+                Text(message).font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+            case .loading, .ready:
+                EmptyView()
+            }
+            HStack {
+                if let lastUpdate = weather.lastUpdate {
+                    Text("Updated \(lastUpdate.formatted(date: .omitted, time: .shortened)) · refreshes hourly")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Refresh") { weather.refresh() }
+            }
+            Text("Leave the city empty to use your current location. Weather data by Open-Meteo.com.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Calendars
@@ -232,6 +273,7 @@ private final class SettingsState: ObservableObject {
     @Published var launchAtLogin = SMAppService.mainApp.status == .enabled
     @Published var loginItemError: String?
     @Published var showLog = false
+    @Published var weatherCity = AppSettings.weatherCity
 
     func setLaunchAtLogin(_ enabled: Bool) {
         do {

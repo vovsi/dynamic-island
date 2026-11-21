@@ -27,4 +27,12 @@ enum AppSettings {
     }
 
     private static let calendarBlocksKey = "calendarBlocks"
+
+    /// City for the weather; empty means "current location".
+    static var weatherCity: String {
+        get { UserDefaults.standard.string(forKey: weatherCityKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: weatherCityKey) }
+    }
+
+    private static let weatherCityKey = "weatherCity"
 }

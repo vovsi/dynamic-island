@@ -11,14 +11,21 @@ final class IslandViewModel: ObservableObject {
     @Published var state: State = .collapsed
     @Published var isHovering = false
     @Published var notch: NotchInfo = .fallback
+    @Published var isWeatherExpanded = false
+
+    /// Weather block frame in the island's coordinate space (top-left origin).
+    var weatherFrame: CGRect = .zero
 
     var onOpenSettings: () -> Void = {}
     var onCollapseRequest: () -> Void = {}
+    var onWeatherToggle: () -> Void = {}
 
     // MARK: - Geometry
 
     static let expandedWidth: CGFloat = 680
     static let expandedContentHeight: CGFloat = 200
+    /// Extra height while the 7-day forecast is open below the notch.
+    static let weatherExtraHeight: CGFloat = 40
     static let hoverGrowth = CGSize(width: 18, height: 4)
 
     var isExpanded: Bool { state == .expanded }
@@ -27,7 +34,15 @@ final class IslandViewModel: ObservableObject {
     var bottomRadius: CGFloat { isExpanded ? 34 : 10 }
 
     var expandedSize: CGSize {
-        CGSize(width: Self.expandedWidth, height: notch.size.height + Self.expandedContentHeight)
+        CGSize(
+            width: Self.expandedWidth,
+            height: notch.size.height + Self.expandedContentHeight + (isWeatherExpanded ? Self.weatherExtraHeight : 0)
+        )
+    }
+
+    /// Largest island size; the panel is laid out for it once.
+    var maxExpandedSize: CGSize {
+        CGSize(width: Self.expandedWidth, height: notch.size.height + Self.expandedContentHeight + Self.weatherExtraHeight)
     }
 
     var collapsedSize: CGSize {
@@ -55,6 +70,18 @@ final class IslandViewModel: ObservableObject {
             y: notch.screenFrame.maxY - size.height,
             width: size.width,
             height: size.height
+        )
+    }
+
+    /// Weather block in global screen coordinates.
+    var weatherScreenRect: NSRect {
+        guard !weatherFrame.isNull else { return .zero }
+        let island = screenRect(for: size)
+        return NSRect(
+            x: island.minX + weatherFrame.minX,
+            y: island.maxY - weatherFrame.maxY,
+            width: weatherFrame.width,
+            height: weatherFrame.height
         )
     }
 

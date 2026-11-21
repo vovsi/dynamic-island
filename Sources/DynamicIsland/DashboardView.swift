@@ -1,23 +1,56 @@
 import SwiftUI
 
-/// Expanded island: today's events, today's schedule (Google account calendars), settings button.
+/// Expanded island: weather, today's events, today's schedule (Google account calendars), settings button.
 struct DashboardView: View {
     let notchSize: CGSize
     let horizontalInset: CGFloat
     let updateAvailable: Bool
+    let isWeatherExpanded: Bool
     let onOpenSettings: () -> Void
+    let onWeatherToggle: () -> Void
+    let onWeatherFrame: (CGRect) -> Void
 
     @ObservedObject private var store = CalendarStore.shared
 
+    private var weatherHeight: CGFloat { max(notchSize.height - 8, 20) }
+    private let cardSpacing: CGFloat = 10
+
     var body: some View {
-        VStack(spacing: 10) {
-            header
-            TimelineView(.periodic(from: .now, by: 30)) { context in
-                HStack(alignment: .top, spacing: 10) {
-                    EventsCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
-                    ScheduleCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: cardSpacing) {
+                header
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    HStack(alignment: .top, spacing: cardSpacing) {
+                        EventsCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
+                        ScheduleCard(store: store, now: context.date, onOpenSettings: onOpenSettings)
+                    }
                 }
             }
+
+            // Pill stays left of the notch; the forecast covers the Events card below the notch
+            // (never under the camera housing, which screenshots do not show).
+            WeatherPill(
+                weather: WeatherStore.shared,
+                isActive: isWeatherExpanded,
+                height: weatherHeight,
+                maxWidth: max((IslandViewModel.expandedWidth - notchSize.width) / 2 - horizontalInset - 8, 60),
+                onToggle: onWeatherToggle,
+                onOpenSettings: onOpenSettings
+            )
+            .reportsWeatherFrame()
+            .padding(.top, (notchSize.height - weatherHeight) / 2)
+
+            if isWeatherExpanded {
+                WeatherForecastPanel(weather: WeatherStore.shared, onToggle: onWeatherToggle)
+                    .frame(width: (IslandViewModel.expandedWidth - 2 * horizontalInset - cardSpacing) / 2)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .reportsWeatherFrame()
+                    .padding(.top, notchSize.height + cardSpacing)
+                    .transition(.scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity))
+            }
+        }
+        .onPreferenceChange(WeatherFrameKey.self) { frame in
+            MainActor.assumeIsolated { onWeatherFrame(frame) }
         }
         .padding(.horizontal, horizontalInset)
         .padding(.bottom, 16)

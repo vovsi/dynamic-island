@@ -14,6 +14,7 @@ final class IslandController {
     private let expandAnimation = Animation.spring(response: 0.42, dampingFraction: 0.74)
     private let collapseAnimation = Animation.spring(response: 0.36, dampingFraction: 0.88)
     private let hoverAnimation = Animation.spring(response: 0.3, dampingFraction: 0.65)
+    private let weatherAnimation = Animation.spring(response: 0.4, dampingFraction: 0.82)
 
     func start() {
         viewModel.onOpenSettings = { [weak self] in
@@ -21,6 +22,10 @@ final class IslandController {
             SettingsWindowController.shared.show()
         }
         viewModel.onCollapseRequest = { [weak self] in self?.collapse() }
+        viewModel.onWeatherToggle = { [weak self] in
+            guard let self else { return }
+            withAnimation(self.weatherAnimation) { self.viewModel.isWeatherExpanded.toggle() }
+        }
 
         let panel = NotchPanel(contentRect: .zero)
         let host = FirstMouseHostingView(rootView: IslandRootView(viewModel: viewModel, onTap: { [weak self] in
@@ -49,7 +54,7 @@ final class IslandController {
     private func layout() {
         guard let panel else { return }
         viewModel.notch = NotchGeometry.detect()
-        let expanded = viewModel.expandedSize
+        let expanded = viewModel.maxExpandedSize
         let width = expanded.width + shadowPadding * 2
         let height = expanded.height + shadowPadding
         let frame = NSRect(
@@ -97,6 +102,11 @@ final class IslandController {
                 withAnimation(hoverAnimation) { viewModel.isHovering = inside }
             }
         case .expanded:
+            // The expanded weather block shrinks back once the cursor leaves it.
+            if viewModel.isWeatherExpanded,
+               !viewModel.weatherScreenRect.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation) {
+                withAnimation(weatherAnimation) { viewModel.isWeatherExpanded = false }
+            }
             if inside {
                 cancelScheduledCollapse()
             } else if AppSettings.collapseOnMouseExit {
@@ -131,6 +141,7 @@ final class IslandController {
         withAnimation(collapseAnimation) {
             viewModel.state = .collapsed
             viewModel.isHovering = false
+            viewModel.isWeatherExpanded = false
         }
         handleMouseMove()
     }

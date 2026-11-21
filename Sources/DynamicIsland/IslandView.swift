@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct IslandRootView: View {
+    static let coordinateSpace = "island"
+
     @ObservedObject var viewModel: IslandViewModel
     @ObservedObject private var updates = UpdateManager.shared
     var onTap: () -> Void
@@ -24,12 +26,16 @@ struct IslandRootView: View {
                         notchSize: viewModel.notch.size,
                         horizontalInset: viewModel.topRadius + 18,
                         updateAvailable: updates.isUpdateAvailable,
-                        onOpenSettings: viewModel.onOpenSettings
+                        isWeatherExpanded: viewModel.isWeatherExpanded,
+                        onOpenSettings: viewModel.onOpenSettings,
+                        onWeatherToggle: viewModel.onWeatherToggle,
+                        onWeatherFrame: { viewModel.weatherFrame = $0 }
                     )
                     .transition(.islandContent)
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .top)
+            .coordinateSpace(name: Self.coordinateSpace)
             .clipShape(shape)
         }
         .frame(width: size.width, height: size.height)
