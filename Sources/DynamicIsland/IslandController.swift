@@ -10,6 +10,14 @@ final class IslandController {
     private var collapseWorkItem: DispatchWorkItem?
     private var alertTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
+    /// Events (`DayEvent.id`) whose alert the user closed; they stay silent until their window ends.
+    private var dismissedAlertIDs: Set<String> = []
+    /// Events the sound was already played for.
+    private var announcedAlertIDs: Set<String> = []
+    private var alertSound: NSSound?
+
+    private static let alertSoundName = "Glass"
+    private static let alertSoundDuration: TimeInterval = 2
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
     private let shadowPadding: CGFloat = 60
@@ -26,6 +34,7 @@ final class IslandController {
             SettingsWindowController.shared.show()
         }
         viewModel.onCollapseRequest = { [weak self] in self?.collapse() }
+        viewModel.onDismissEventAlert = { [weak self] in self?.dismissEventAlert() }
         viewModel.onWeatherToggle = { [weak self] in
             guard let self else { return }
             withAnimation(self.weatherAnimation) { self.viewModel.isWeatherExpanded.toggle() }
@@ -91,19 +100,60 @@ final class IslandController {
         updateEventAlert()
     }
 
-    /// On while any timed schedule event is within [start − lead, start + trail).
-    private func updateEventAlert() {
+    /// IDs of timed schedule events within [start − lead, start + trail).
+    private func eventsInAlertWindow() -> Set<String> {
         let now = Date()
         let lead = TimeInterval(max(AppSettings.eventAlertLead, 0) * 60)
         let trail = TimeInterval(max(AppSettings.eventAlertTrail, 0) * 60)
-        let active = CalendarStore.shared.schedule.contains { event in
+        return Set(CalendarStore.shared.schedule.filter { event in
             !event.isAllDay
                 && event.start.addingTimeInterval(-lead) <= now
                 && now < event.start.addingTimeInterval(trail)
+        }.map(\.id))
+    }
+
+    private func updateEventAlert() {
+        let inWindow = eventsInAlertWindow()
+        dismissedAlertIDs.formIntersection(inWindow)
+        announcedAlertIDs.formIntersection(inWindow)
+
+        let pending = inWindow.subtracting(dismissedAlertIDs)
+        if !pending.isSubset(of: announcedAlertIDs) {
+            announcedAlertIDs.formUnion(pending)
+            playAlertSound()
         }
+
+        let active = !pending.isEmpty
         guard active != viewModel.hasEventAlert else { return }
         withAnimation(alertAnimation) { viewModel.hasEventAlert = active }
         handleMouseMove()
+    }
+
+    /// Closes the current alert; the next event raises a new one.
+    private func dismissEventAlert() {
+        dismissedAlertIDs.formUnion(eventsInAlertWindow())
+        stopAlertSound()
+        updateEventAlert()
+    }
+
+    /// One short chime, cut off after a couple of seconds.
+    private func playAlertSound() {
+        guard AppSettings.eventAlertSound, let sound = NSSound(named: Self.alertSoundName) else { return }
+        alertSound?.stop()
+        sound.volume = 0.6
+        sound.play()
+        alertSound = sound
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.alertSoundDuration) { [weak self] in
+            MainActor.assumeIsolated {
+                guard self?.alertSound === sound else { return }
+                self?.stopAlertSound()
+            }
+        }
+    }
+
+    private func stopAlertSound() {
+        alertSound?.stop()
+        alertSound = nil
     }
 
     // MARK: - Mouse tracking

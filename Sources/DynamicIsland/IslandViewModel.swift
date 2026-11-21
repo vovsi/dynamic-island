@@ -21,6 +21,7 @@ final class IslandViewModel: ObservableObject {
     var onOpenSettings: () -> Void = {}
     var onCollapseRequest: () -> Void = {}
     var onWeatherToggle: () -> Void = {}
+    var onDismissEventAlert: () -> Void = {}
 
     // MARK: - Geometry
 

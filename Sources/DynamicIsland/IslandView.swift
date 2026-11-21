@@ -33,7 +33,12 @@ struct IslandRootView: View {
                     )
                     .transition(.islandContent)
                 } else if viewModel.hasEventAlert {
-                    EventAlertIndicator(sideWidth: IslandViewModel.alertSideWidth, inset: viewModel.topRadius)
+                    EventAlertIndicator(
+                        sideWidth: IslandViewModel.alertSideWidth,
+                        inset: viewModel.topRadius,
+                        isHovering: viewModel.isHovering,
+                        onDismiss: viewModel.onDismissEventAlert
+                    )
                         .frame(height: viewModel.notch.size.height)
                         .transition(.opacity)
                 }
@@ -59,9 +64,12 @@ struct IslandRootView: View {
 // MARK: - Event alert
 
 /// Collapsed-island signal for a schedule event: pulsing red warning on the left, blue schedule icon on the right.
+/// On hover the right icon turns into a close button that dismisses the current alert.
 private struct EventAlertIndicator: View {
     let sideWidth: CGFloat
     let inset: CGFloat
+    let isHovering: Bool
+    let onDismiss: () -> Void
 
     private static let pulsePeriod: TimeInterval = 1.6
 
@@ -77,9 +85,24 @@ private struct EventAlertIndicator: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "clock.fill")
-                .foregroundStyle(.blue)
-                .frame(width: sideWidth)
+            ZStack {
+                if isHovering {
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white.opacity(0.75))
+                            .frame(width: sideWidth, height: sideWidth)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Dismiss this alert")
+                    .transition(.opacity)
+                } else {
+                    Image(systemName: "clock.fill")
+                        .foregroundStyle(.blue)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: sideWidth)
         }
         .font(.system(size: 13, weight: .semibold))
         .padding(.horizontal, inset)

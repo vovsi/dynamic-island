@@ -38,6 +38,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.autoCheckUpdatesKey) private var autoCheckUpdates = true
     @AppStorage(AppSettings.eventAlertLeadKey) private var eventAlertLead = 5
     @AppStorage(AppSettings.eventAlertTrailKey) private var eventAlertTrail = 5
+    @AppStorage(AppSettings.eventAlertSoundKey) private var eventAlertSound = true
 
     @StateObject private var state = SettingsState()
 
@@ -62,7 +63,8 @@ struct SettingsView: View {
             Section("Event Alert") {
                 Stepper("Show \(eventAlertLead) min before start", value: $eventAlertLead, in: 0...60)
                 Stepper("Keep \(eventAlertTrail) min after start", value: $eventAlertTrail, in: 0...60)
-                Text("The collapsed island shows a pulsing warning beside the notch when a Schedule event is near.")
+                Toggle("Play a short sound when the alert appears", isOn: $eventAlertSound)
+                Text("The collapsed island shows a pulsing warning beside the notch when a Schedule event is near. Hover the island and click × to dismiss it until the next event.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

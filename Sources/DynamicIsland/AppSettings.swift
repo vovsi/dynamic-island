@@ -6,6 +6,7 @@ enum AppSettings {
     static let autoCheckUpdatesKey = "autoCheckUpdates"
     static let eventAlertLeadKey = "eventAlertLeadMinutes"
     static let eventAlertTrailKey = "eventAlertTrailMinutes"
+    static let eventAlertSoundKey = "eventAlertSound"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -14,6 +15,7 @@ enum AppSettings {
             autoCheckUpdatesKey: true,
             eventAlertLeadKey: 5,
             eventAlertTrailKey: 5,
+            eventAlertSoundKey: true,
         ])
     }
 
@@ -24,6 +26,7 @@ enum AppSettings {
     static var eventAlertLead: Int { UserDefaults.standard.integer(forKey: eventAlertLeadKey) }
     /// Minutes after a schedule event starts the signal stays on.
     static var eventAlertTrail: Int { UserDefaults.standard.integer(forKey: eventAlertTrailKey) }
+    static var eventAlertSound: Bool { UserDefaults.standard.bool(forKey: eventAlertSoundKey) }
 
     /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).
     static var calendarBlocks: [String: CalendarBlock] {
