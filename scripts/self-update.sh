@@ -46,11 +46,14 @@ install)
     echo "$(date) Waiting for PID $pid to exit…"
     while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
 
-    staging="${target%.app}.updating.app"
+    # Install under the current bundle name, dropping the legacy one.
+    final="$(dirname "$target")/Dynamic Island.app"
+    staging="$(dirname "$target")/Dynamic Island.updating.app"
     rm -rf "$staging"
     ditto "$new_app" "$staging"
-    rm -rf "$target"
-    mv "$staging" "$target"
+    rm -rf "$target" "$final"
+    mv "$staging" "$final"
+    target="$final"
 
     echo "$(date) Installed to $target, relaunching."
     open "$target"

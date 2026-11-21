@@ -13,7 +13,7 @@ Turns the MacBook notch into an iPhone‑style Dynamic Island. Click the notch t
 ./scripts/install.sh
 ```
 
-Builds `build/DynamicIsland.app`, installs it to `/Applications` (or `~/Applications`) and launches it. Build only: `./scripts/build.sh`.
+Builds `build/DynamicIsland.app`, installs it as `Dynamic Island.app` to `/Applications` (or `~/Applications`) and launches it. Build only: `./scripts/build.sh`. App icon: `Support/AppIcon.icns`, regenerate with `./scripts/make-icon.sh` (source: `scripts/make-icon.swift`).
 
 ## Calendars
 

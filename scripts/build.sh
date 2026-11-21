@@ -20,6 +20,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/scripts/self-update.sh" "$APP/Contents/Resources/self-update.sh"
 cp -R "$ROOT"/Support/*.lproj "$APP/Contents/Resources/"
+cp "$ROOT/Support/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 REPO_URL="$(git remote get-url origin 2>/dev/null || echo "")"

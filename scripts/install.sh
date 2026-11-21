@@ -11,12 +11,12 @@ if [ ! -w "$DEST" ]; then
 fi
 mkdir -p "$DEST"
 
-TARGET="$DEST/DynamicIsland.app"
+TARGET="$DEST/Dynamic Island.app"
 
 pkill -x DynamicIsland 2>/dev/null || true
 while pgrep -x DynamicIsland >/dev/null; do sleep 0.2; done
 
-rm -rf "$TARGET"
+rm -rf "$TARGET" "$DEST/DynamicIsland.app"
 ditto "$ROOT/build/DynamicIsland.app" "$TARGET"
 open "$TARGET"
 

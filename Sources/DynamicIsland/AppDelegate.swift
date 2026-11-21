@@ -4,6 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var islandController: IslandController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        BundleRename.migrateIfNeeded()
         AppSettings.registerDefaults()
 
         let controller = IslandController()
