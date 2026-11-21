@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -7,6 +8,8 @@ final class IslandController {
     private var panel: NotchPanel?
     private var monitors: [Any] = []
     private var collapseWorkItem: DispatchWorkItem?
+    private var alertTimer: Timer?
+    private var cancellables: Set<AnyCancellable> = []
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
     private let shadowPadding: CGFloat = 60
@@ -15,6 +18,7 @@ final class IslandController {
     private let collapseAnimation = Animation.spring(response: 0.36, dampingFraction: 0.88)
     private let hoverAnimation = Animation.spring(response: 0.3, dampingFraction: 0.65)
     private let weatherAnimation = Animation.spring(response: 0.4, dampingFraction: 0.82)
+    private let alertAnimation = Animation.spring(response: 0.45, dampingFraction: 0.8)
 
     func start() {
         viewModel.onOpenSettings = { [weak self] in
@@ -39,6 +43,7 @@ final class IslandController {
         panel.orderFrontRegardless()
 
         installMonitors()
+        startEventAlerts()
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -64,6 +69,41 @@ final class IslandController {
             height: height
         )
         panel.setFrame(frame, display: true)
+    }
+
+    // MARK: - Event alert
+
+    private func startEventAlerts() {
+        CalendarStore.shared.$schedule
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateEventAlert() } }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateEventAlert() } }
+            .store(in: &cancellables)
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateEventAlert() }
+        }
+        timer.tolerance = 2
+        alertTimer = timer
+        updateEventAlert()
+    }
+
+    /// On while any timed schedule event is within [start − lead, start + trail).
+    private func updateEventAlert() {
+        let now = Date()
+        let lead = TimeInterval(max(AppSettings.eventAlertLead, 0) * 60)
+        let trail = TimeInterval(max(AppSettings.eventAlertTrail, 0) * 60)
+        let active = CalendarStore.shared.schedule.contains { event in
+            !event.isAllDay
+                && event.start.addingTimeInterval(-lead) <= now
+                && now < event.start.addingTimeInterval(trail)
+        }
+        guard active != viewModel.hasEventAlert else { return }
+        withAnimation(alertAnimation) { viewModel.hasEventAlert = active }
+        handleMouseMove()
     }
 
     // MARK: - Mouse tracking

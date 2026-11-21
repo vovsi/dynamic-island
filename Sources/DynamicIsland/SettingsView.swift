@@ -36,6 +36,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.collapseOnMouseExitKey) private var collapseOnMouseExit = true
     @AppStorage(AppSettings.hapticFeedbackKey) private var hapticFeedback = true
     @AppStorage(AppSettings.autoCheckUpdatesKey) private var autoCheckUpdates = true
+    @AppStorage(AppSettings.eventAlertLeadKey) private var eventAlertLead = 5
+    @AppStorage(AppSettings.eventAlertTrailKey) private var eventAlertTrail = 5
 
     @StateObject private var state = SettingsState()
 
@@ -56,6 +58,14 @@ struct SettingsView: View {
             }
 
             calendarSections
+
+            Section("Event Alert") {
+                Stepper("Show \(eventAlertLead) min before start", value: $eventAlertLead, in: 0...60)
+                Stepper("Keep \(eventAlertTrail) min after start", value: $eventAlertTrail, in: 0...60)
+                Text("The collapsed island shows a pulsing warning beside the notch when a Schedule event is near.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             weatherSection
 

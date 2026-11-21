@@ -32,6 +32,10 @@ struct IslandRootView: View {
                         onWeatherFrame: { viewModel.weatherFrame = $0 }
                     )
                     .transition(.islandContent)
+                } else if viewModel.hasEventAlert {
+                    EventAlertIndicator(sideWidth: IslandViewModel.alertSideWidth, inset: viewModel.topRadius)
+                        .frame(height: viewModel.notch.size.height)
+                        .transition(.opacity)
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .top)
@@ -49,6 +53,36 @@ struct IslandRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
+    }
+}
+
+// MARK: - Event alert
+
+/// Collapsed-island signal for a schedule event: pulsing red warning on the left, blue schedule icon on the right.
+private struct EventAlertIndicator: View {
+    let sideWidth: CGFloat
+    let inset: CGFloat
+
+    private static let pulsePeriod: TimeInterval = 1.6
+
+    var body: some View {
+        HStack(spacing: 0) {
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                let phase = context.date.timeIntervalSinceReferenceDate / Self.pulsePeriod * 2 * .pi
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .opacity(0.3 + 0.7 * (0.5 + 0.5 * sin(phase)))
+            }
+            .frame(width: sideWidth)
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "clock.fill")
+                .foregroundStyle(.blue)
+                .frame(width: sideWidth)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .padding(.horizontal, inset)
     }
 }
 
