@@ -16,14 +16,34 @@ struct DashboardView: View {
     @ObservedObject private var keepAwake = KeepAwakeManager.shared
     @ObservedObject private var keyboardLock = KeyboardLockManager.shared
     @ObservedObject private var batteries = DeviceBatteryStore.shared
+    @ObservedObject private var weather = WeatherStore.shared
 
     /// Top row fills the notch's height, leaving a hairline of black above and below.
-    private var rowHeight: CGFloat { max(notchSize.height - 6, 20) }
+    private var rowHeight: CGFloat { max(notchSize.height - 4, 20) }
     private var weatherHeight: CGFloat { rowHeight }
     private let cardSpacing: CGFloat = 10
-    /// Battery badges and header buttons share one size so the row reads as a single strip.
-    private var badgeSize: CGFloat { min(rowHeight, 30) }
     private let badgeGap: CGFloat = 8
+    /// Gap between battery badges, as a share of their size.
+    private static let badgeSpacingRatio: CGFloat = 0.22
+    /// The pill asks for exactly what its icon and reading need, so the reading itself is
+    /// never the thing that gets ellipsized, and badges keep the rest.
+    private var minWeatherWidth: CGFloat { WeatherPill.minWidth(for: weather.current) }
+
+    /// Header buttons sit right of the notch, where nothing competes for room.
+    private var headerButtonSize: CGFloat { min(rowHeight, 30) }
+
+    private var badgeCount: CGFloat { CGFloat(min(batteries.devices.count, DeviceBatteryStore.maxShown)) }
+
+    /// Badges match the header buttons, but step down (never below 22) once enough accessories
+    /// are connected to squeeze the weather pill out of its minimum width.
+    private var badgeSize: CGFloat {
+        guard badgeCount > 0 else { return headerButtonSize }
+        let room = leftRoom - minWeatherWidth - badgeGap
+        let fitted = room / (badgeCount * (1 + Self.badgeSpacingRatio) - Self.badgeSpacingRatio)
+        return min(headerButtonSize, max(fitted, 22))
+    }
+
+    private var badgeSpacing: CGFloat { badgeSize * Self.badgeSpacingRatio }
 
     /// Room left of the notch; the weather pill and the battery badges share it.
     private var leftRoom: CGFloat {
@@ -31,11 +51,7 @@ struct DashboardView: View {
     }
 
     private var batteryBarWidth: CGFloat {
-        DeviceBatteryBar.width(
-            count: min(batteries.devices.count, DeviceBatteryStore.maxShown),
-            size: badgeSize,
-            spacing: badgeSize * 0.22
-        )
+        DeviceBatteryBar.width(count: Int(badgeCount), size: badgeSize, spacing: badgeSpacing)
     }
 
     var body: some View {
@@ -54,7 +70,7 @@ struct DashboardView: View {
             // (never under the camera housing, which screenshots do not show).
             HStack(spacing: badgeGap) {
                 WeatherPill(
-                    weather: WeatherStore.shared,
+                    weather: weather,
                     isActive: isWeatherExpanded,
                     height: weatherHeight,
                     maxWidth: max(leftRoom - (batteryBarWidth > 0 ? batteryBarWidth + badgeGap : 0), 60),
@@ -62,7 +78,7 @@ struct DashboardView: View {
                     onOpenSettings: onOpenSettings
                 )
                 .reportsWeatherFrame()
-                DeviceBatteryBar(store: batteries, size: badgeSize, spacing: badgeSize * 0.22)
+                DeviceBatteryBar(store: batteries, size: badgeSize, spacing: badgeSpacing)
             }
             .frame(height: weatherHeight)
             .padding(.top, (notchSize.height - weatherHeight) / 2)
@@ -96,8 +112,8 @@ struct DashboardView: View {
             Spacer(minLength: 0)
             Button(action: keyboardLock.toggle) {
                 TouchpadIcon(color: keyboardLock.isLocked ? .orange : .white.opacity(0.75))
-                    .frame(width: badgeSize * 0.54, height: badgeSize * 0.46)
-                    .frame(width: badgeSize, height: badgeSize)
+                    .frame(width: headerButtonSize * 0.54, height: headerButtonSize * 0.46)
+                    .frame(width: headerButtonSize, height: headerButtonSize)
                     .background(Circle().fill(.white.opacity(keyboardLock.isLocked ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
@@ -105,7 +121,7 @@ struct DashboardView: View {
             if let end = keepAwake.endDate {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(KeepAwakeManager.remainingText(until: end, now: context.date))
-                        .font(.system(size: badgeSize * 0.42, weight: .semibold, design: .rounded))
+                        .font(.system(size: headerButtonSize * 0.42, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -115,21 +131,22 @@ struct DashboardView: View {
             }
             Button(action: onKeepAwakePickerToggle) {
                 TabletIcon(color: keepAwake.isActive ? .orange : .white.opacity(0.75))
-                    .frame(width: badgeSize * 0.46, height: badgeSize * 0.46)
-                    .frame(width: badgeSize, height: badgeSize)
+                    .frame(width: headerButtonSize * 0.46, height: headerButtonSize * 0.46)
+                    .frame(width: headerButtonSize, height: headerButtonSize)
                     .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
             .hoverHint(tr("Anti-sleep", "Антисон"))
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: badgeSize * 0.5, weight: .semibold))
+                    .font(.system(size: headerButtonSize * 0.5, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: badgeSize, height: badgeSize)
+                    .frame(width: headerButtonSize, height: headerButtonSize)
                     .background(Circle().fill(.white.opacity(0.1)))
                     .overlay(alignment: .topTrailing) {
                         if updateAvailable {
-                            Circle().fill(Color.accentColor).frame(width: badgeSize * 0.29, height: badgeSize * 0.29)
+                            Circle().fill(Color.accentColor)
+                                .frame(width: headerButtonSize * 0.29, height: headerButtonSize * 0.29)
                         }
                     }
             }

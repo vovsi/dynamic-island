@@ -24,18 +24,17 @@ struct WeatherPill: View {
     // MARK: - Compact
 
     private var compact: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Self.gap) {
             if let current = weather.current {
-                Image(systemName: WeatherCondition.symbol(code: current.code, isDay: current.isDay))
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 15))
+                conditionIcon(current)
                 Text(Self.degrees(current.temperature))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: Self.temperatureSize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
-                if let city = weather.city {
+                // Dropped whole rather than ellipsized: "Дне…" says less than nothing.
+                if let city = weather.city, fits(city, beside: current) {
                     Text(city)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(.system(size: Self.citySize, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                 }
@@ -44,13 +43,51 @@ struct WeatherPill: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(weather.status == .loading ? tr("Weather…", "Погода…") : tr("Set location", "Указать город"))
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(size: Self.citySize, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, Self.sideInset)
         .frame(maxWidth: maxWidth, maxHeight: .infinity, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func conditionIcon(_ current: WeatherStore.Current) -> some View {
+        Image(systemName: WeatherCondition.symbol(code: current.code, isDay: current.isDay))
+            .symbolRenderingMode(.multicolor)
+            .font(.system(size: Self.iconSize))
+    }
+
+    private static let gap: CGFloat = 6
+    private static let sideInset: CGFloat = 10
+    private static let iconSize: CGFloat = 15
+    private static let temperatureSize: CGFloat = 14
+    private static let citySize: CGFloat = 12.5
+
+    /// Measured rather than guessed, so the city appears only when it fits whole.
+    private func fits(_ city: String, beside current: WeatherStore.Current) -> Bool {
+        let fixed = 2 * Self.sideInset
+            + Self.iconSize * 1.4 // a weather glyph is a little wider than its point size
+            + 2 * Self.gap
+            + Self.width(Self.degrees(current.temperature), size: Self.temperatureSize, weight: .semibold)
+        return fixed + Self.width(city, size: Self.citySize, weight: .medium) <= maxWidth
+    }
+
+    /// Width the pill needs for the icon and the reading alone, so whatever shares the row
+    /// left of the notch can take exactly what is left over.
+    static func minWidth(for current: WeatherStore.Current?) -> CGFloat {
+        let reading = current.map { degrees($0.temperature) } ?? "00°"
+        return 2 * sideInset
+            + iconSize * 1.4
+            + gap
+            + width(reading, size: temperatureSize, weight: .semibold)
+            + 2 // slack: the rounded digits measure a hair wider than the system face
+    }
+
+    private static func width(_ text: String, size: CGFloat, weight: NSFont.Weight) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        return (text as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
     }
 
     static func degrees(_ value: Double) -> String {
