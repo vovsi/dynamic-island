@@ -50,6 +50,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.eventAlertSoundKey) private var eventAlertSound = true
     @AppStorage(AppSettings.lowBatteryAlertKey) private var lowBatteryAlert = true
     @AppStorage(AppSettings.lowBatteryThresholdKey) private var lowBatteryThreshold = 20
+    @AppStorage(AppSettings.phoneBatteryEnabledKey) private var phoneBatteryEnabled = false
+    @AppStorage(AppSettings.phoneBatteryPathKey) private var phoneBatteryPath = ""
     @AppStorage(AppSettings.languageKey) private var language = AppLanguage.system.rawValue
 
     @StateObject private var state = SettingsState()
@@ -200,10 +202,90 @@ struct SettingsView: View {
                     }
                 }
             }
+            Toggle(tr("Show the iPhone level from a Shortcuts file", "Показывать заряд iPhone из файла Ярлыка"), isOn: $phoneBatteryEnabled)
+            if phoneBatteryEnabled {
+                phoneFileRow
+            }
             Text(tr("The expanded island shows every connected accessory as an icon inside its battery ring. A device that runs low raises a red dot beside the collapsed notch until it is put on a charger; hover the island and click × to hide it sooner.", "В раскрытом острове каждое подключённое устройство показано иконкой в кольце заряда. Когда заряд падает, рядом с вырезом свёрнутого острова горит красная точка — пока устройство не поставят на зарядку. Наведите курсор и нажмите ×, чтобы скрыть раньше."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// File a Shortcuts automation on the iPhone writes into iCloud Drive; macOS itself never
+    /// exposes the phone's battery level.
+    @ViewBuilder
+    private var phoneFileRow: some View {
+        LabeledContent(tr("File", "Файл")) {
+            HStack(spacing: 8) {
+                Text(URL(fileURLWithPath: currentPhonePath).lastPathComponent)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .help(currentPhonePath)
+                Button(tr("Choose…", "Выбрать…"), action: choosePhoneFile)
+                Button(tr("Create Folder", "Создать папку"), action: createPhoneFolder)
+            }
+        }
+        phoneStatusRow
+        Text(tr("On the iPhone: Shortcuts → Automation → run \"Get Battery Level\", put it into a Text action as {\"percent\": Battery Level} and save that text to iCloud Drive as the file above (overwrite on, \"Ask where to save\" off). Hourly or on battery-level changes is enough; a level older than 6 hours is ignored.", "На iPhone: Ярлыки → Автоматизация → «Получить уровень заряда», положить его в действие «Текст» как {\"percent\": Уровень заряда} и сохранить этот текст в iCloud Drive в файл выше (перезапись включена, «Спрашивать, куда сохранить» выключено). Достаточно раз в час или при изменении заряда; значение старше 6 часов не показывается."))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var phoneStatusRow: some View {
+        switch batteries.phoneStatus {
+        case .off:
+            EmptyView()
+        case .missing:
+            Label(tr("File not found yet.", "Файл пока не найден."), systemImage: "questionmark.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .unreadable:
+            Label(tr("File found, but no level could be read from it.", "Файл найден, но заряд из него не прочитан."), systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        case .stale(let date):
+            Label {
+                Text(tr("Last level is too old — ", "Последнее значение устарело — ")) + Text(date, format: .relative(presentation: .named))
+            } icon: {
+                Image(systemName: "clock.badge.exclamationmark")
+            }
+            .font(.caption)
+            .foregroundStyle(.orange)
+        case .ready(let date):
+            Label {
+                Text(tr("Updated ", "Обновлено ")) + Text(date, format: .relative(presentation: .named))
+            } icon: {
+                Image(systemName: "checkmark.circle")
+            }
+            .font(.caption)
+            .foregroundStyle(.green)
+        }
+    }
+
+    private var currentPhonePath: String {
+        phoneBatteryPath.isEmpty ? AppSettings.defaultPhoneBatteryPath : phoneBatteryPath
+    }
+
+    /// Picking the file here also hands the app access to it.
+    private func choosePhoneFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: currentPhonePath).deletingLastPathComponent()
+        panel.message = tr("Choose the file the iPhone shortcut writes.", "Выберите файл, который пишет Ярлык на iPhone.")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        phoneBatteryPath = url.path
+        DeviceBatteryStore.shared.refresh()
+    }
+
+    /// Creates the iCloud Drive folder so the shortcut has somewhere to save to.
+    private func createPhoneFolder() {
+        let folder = URL(fileURLWithPath: currentPhonePath).deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
     }
 
     // MARK: - Weather

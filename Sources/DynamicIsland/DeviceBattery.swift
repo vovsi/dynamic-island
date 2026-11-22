@@ -4,6 +4,7 @@ import SwiftUI
 /// Battery level of one connected Apple/Bluetooth accessory (mouse, keyboard, trackpad, headphones, case).
 struct DeviceBattery: Identifiable, Equatable {
     enum Kind: Int {
+        case phone
         case mouse
         case keyboard
         case trackpad
@@ -48,6 +49,8 @@ extension DeviceBattery {
     /// SF Symbol for the device, picking the first name this macOS actually ships.
     var symbol: String {
         switch kind {
+        case .phone:
+            return Self.symbol(["iphone", "iphone.gen3"])
         case .mouse:
             return Self.symbol(["computermouse.fill", "magicmouse.fill", "cursorarrow.click"])
         case .keyboard:

@@ -15,10 +15,26 @@ final class DeviceBatteryStore: ObservableObject {
     static let maxShown = 4
 
     @Published private(set) var devices: [DeviceBattery] = []
+    /// What the iPhone file looks like right now, for the Settings window.
+    @Published private(set) var phoneStatus: PhoneStatus = .off
+
+    /// State of the file a Shortcuts automation on the iPhone writes into iCloud Drive.
+    enum PhoneStatus: Equatable {
+        case off
+        case missing
+        case unreadable
+        /// Last level is older than `phoneStaleInterval`; the phone is left out of the island.
+        case stale(Date)
+        case ready(Date)
+    }
+
+    /// A level this old is treated as unknown rather than shown.
+    nonisolated static let phoneStaleInterval: TimeInterval = 6 * 60 * 60
 
     private var timer: Timer?
     private var task: Task<Void, Never>?
     private var wakeObserver: NSObjectProtocol?
+    private var defaultsObserver: NSObjectProtocol?
     /// Last seen level per device; a level that went up means the device is on a charger.
     private var lastPercent: [String: Int] = [:]
 
@@ -39,15 +55,23 @@ final class DeviceBatteryStore: ObservableObject {
             MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
         }
 
+        // Picking the iPhone file in Settings should take effect at once.
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
+        }
+
         refresh()
     }
 
     func refresh() {
         guard task == nil else { return }
         task = Task { [weak self] in
-            let collected = await Self.collect()
+            let (collected, phoneStatus) = await Self.collect()
             guard let self else { return }
             self.apply(collected)
+            if self.phoneStatus != phoneStatus { self.phoneStatus = phoneStatus }
             self.task = nil
         }
     }
@@ -81,12 +105,97 @@ final class DeviceBatteryStore: ObservableObject {
         let isCharging: Bool
     }
 
-    private static func collect() async -> [Reading] {
+    private static func collect() async -> ([Reading], PhoneStatus) {
         var byID: [String: Reading] = [:]
         // The IORegistry reports a charging flag, so it wins over system_profiler for the same device.
         for reading in await bluetoothReadings() { byID[reading.id] = reading }
         for reading in hidReadings() { byID[reading.id] = reading }
-        return Array(byID.values)
+        let (phone, phoneStatus) = phoneReading()
+        if let phone { byID[phone.id] = phone }
+        return (Array(byID.values), phoneStatus)
+    }
+
+    // MARK: - iPhone
+
+    /// macOS exposes no iPhone battery level, so the phone writes its own into a file in iCloud Drive
+    /// (a Shortcuts automation); this reads whatever landed there. Accepts `{"percent": 57}` with the
+    /// optional `name`, `charging` and `date` keys, or a bare "57".
+    private nonisolated static func phoneReading() -> (Reading?, PhoneStatus) {
+        guard AppSettings.phoneBatteryEnabled else { return (nil, .off) }
+
+        let url = URL(fileURLWithPath: (AppSettings.phoneBatteryPath as NSString).expandingTildeInPath)
+        requestDownloadIfNeeded(url)
+        guard let data = try? Data(contentsOf: url) else { return (nil, .missing) }
+        guard let parsed = parsePhone(data) else { return (nil, .unreadable) }
+
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        let stamp = parsed.date ?? modified ?? Date()
+        guard Date().timeIntervalSince(stamp) < phoneStaleInterval else { return (nil, .stale(stamp)) }
+
+        let reading = Reading(
+            id: identifier(parsed.name),
+            name: parsed.name,
+            kind: .phone,
+            percent: parsed.percent,
+            isCharging: parsed.charging
+        )
+        return (reading, .ready(stamp))
+    }
+
+    /// An iCloud file that has not been downloaded yet sits next to a `.name.icloud` placeholder.
+    private nonisolated static func requestDownloadIfNeeded(_ url: URL) {
+        let manager = FileManager.default
+        guard !manager.fileExists(atPath: url.path) else { return }
+        let placeholder = url
+            .deletingLastPathComponent()
+            .appendingPathComponent("." + url.lastPathComponent + ".icloud")
+        guard manager.fileExists(atPath: placeholder.path) else { return }
+        try? manager.startDownloadingUbiquitousItem(at: url)
+    }
+
+    private nonisolated static func parsePhone(_ data: Data) -> (name: String, percent: Int, charging: Bool, date: Date?)? {
+        if let dictionary = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            guard let level = ["percent", "level", "battery", "batteryLevel"].compactMap({ number(dictionary[$0]) }).first
+            else { return nil }
+            let name = (dictionary["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "iPhone"
+            let charging = ["charging", "isCharging", "plugged"].compactMap { flag(dictionary[$0]) }.first ?? false
+            let date = ["date", "updated", "timestamp"].compactMap { dictionary[$0] as? String }.first.flatMap(parseDate)
+            return (name, clamped(level), charging, date)
+        }
+        // A one-action shortcut may just write "57" or "57 %".
+        let text = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "%", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        guard let level = Double(text.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        return ("iPhone", clamped(level), false, nil)
+    }
+
+    /// Shortcuts writes the level either as 0…1 or as 0…100, depending on the action used.
+    private nonisolated static func clamped(_ level: Double) -> Int {
+        let percent = level <= 1 ? level * 100 : level
+        return min(max(Int(percent.rounded()), 0), 100)
+    }
+
+    private nonisolated static func number(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber, !(value is Bool) { return number.doubleValue }
+        if let text = value as? String { return Double(text.replacingOccurrences(of: ",", with: ".")) }
+        return nil
+    }
+
+    private nonisolated static func flag(_ value: Any?) -> Bool? {
+        if let boolean = value as? Bool { return boolean }
+        if let number = value as? NSNumber { return number.boolValue }
+        if let text = value as? String {
+            return ["true", "yes", "1", "да"].contains(text.lowercased())
+        }
+        return nil
+    }
+
+    private nonisolated static func parseDate(_ text: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: text) ?? ISO8601DateFormatter().date(from: text)
     }
 
     /// Magic accessories, read straight from the IORegistry.

@@ -28,6 +28,22 @@ Everything comes from macOS Calendar (EventKit) — no API keys or tokens in the
 
 A small weather pill (city, temperature, condition icon) sits beside the notch; click it for a 7‑day forecast, move the cursor away to shrink it back. Data: [Open-Meteo](https://open-meteo.com) (no API key), refreshed hourly in the background. Location comes from Location Services, or set a city in Settings → Weather (stored in `UserDefaults`, coordinates are not persisted).
 
+## Device battery
+
+Every Bluetooth accessory that reports a level is shown beside the weather pill as its icon inside a battery ring — green above the threshold, red at or below it, with a bolt while charging. Levels come from the IORegistry (Magic Mouse / Keyboard / Trackpad) and `system_profiler SPBluetoothDataType` (AirPods, and their case), refreshed every minute. No permissions needed.
+
+When a device drops to the threshold (Settings → Device Battery, 20% by default) and is not charging, the collapsed island shows a pulsing red dot beside the notch with the device badge on the other side. It stays until the device is put on a charger; hover the island and click × to hide it until that device runs low again.
+
+### iPhone
+
+macOS exposes no iPhone battery level to third-party apps, so the phone has to send it. Settings → Device Battery → **Show the iPhone level from a Shortcuts file**, then:
+
+1. **Create Folder** makes `~/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/` (iCloud Drive → DynamicIsland).
+2. On the iPhone: Shortcuts → **Automation** → e.g. *Battery Level* (changes) or *Time of Day* (hourly) → **Get Battery Level** → **Text** with `{"percent": <Battery Level>}` → **Save File** into that folder as `battery.json`, "Overwrite If File Exists" on and "Ask Where to Save" off.
+3. Back in Settings, **Choose…** the file once (that also grants the app access to it).
+
+A bare `57` works too, as does `{"percent": 57, "name": "iPhone 16", "charging": true, "date": "2026-11-22T13:44:00Z"}`. Levels older than 6 hours are ignored, and without a `charging` flag a level that went up counts as charging — the same rule AirPods get.
+
 ## Local config and secrets
 
 Never commit configs or secrets. Preferences live in `UserDefaults`; anything sensitive goes to `~/Library/Application Support/DynamicIsland/` (directory `0700`, files `0600`) or the Keychain.
@@ -44,5 +60,6 @@ Settings → Updates → **Check for Updates** compares the commit the app was b
 - `Sources/DynamicIsland/CalendarStore.swift` — background refresh, split into Events / Schedule.
 - `Sources/DynamicIsland/MacCalendarSource.swift` — EventKit.
 - `Sources/DynamicIsland/WeatherStore.swift`, `WeatherView.swift` — Open-Meteo weather and the weather block.
+- `Sources/DynamicIsland/DeviceBatteryStore.swift`, `DeviceBattery.swift`, `DeviceBatteryView.swift` — accessory and iPhone battery levels, badges and the low-battery alert.
 - `Sources/DynamicIsland/UpdateManager.swift`, `scripts/self-update.sh` — git‑based updater.
 - `Sources/DynamicIsland/SettingsView.swift` — settings window.

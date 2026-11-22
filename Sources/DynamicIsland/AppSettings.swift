@@ -9,6 +9,8 @@ enum AppSettings {
     static let eventAlertSoundKey = "eventAlertSound"
     static let lowBatteryAlertKey = "lowBatteryAlert"
     static let lowBatteryThresholdKey = "lowBatteryThresholdPercent"
+    static let phoneBatteryEnabledKey = "phoneBatteryEnabled"
+    static let phoneBatteryPathKey = "phoneBatteryPath"
     static let languageKey = "language"
 
     static func registerDefaults() {
@@ -21,6 +23,7 @@ enum AppSettings {
             eventAlertSoundKey: true,
             lowBatteryAlertKey: true,
             lowBatteryThresholdKey: 20,
+            phoneBatteryEnabledKey: false,
             languageKey: AppLanguage.system.rawValue,
         ])
     }
@@ -36,6 +39,21 @@ enum AppSettings {
     /// Warn beside the collapsed notch when an accessory drops to this level and is not charging.
     static var lowBatteryAlert: Bool { UserDefaults.standard.bool(forKey: lowBatteryAlertKey) }
     static var lowBatteryThreshold: Int { UserDefaults.standard.integer(forKey: lowBatteryThresholdKey) }
+
+    /// iPhone level written to a file by a Shortcuts automation on the phone (iCloud Drive syncs it here).
+    static var phoneBatteryEnabled: Bool { UserDefaults.standard.bool(forKey: phoneBatteryEnabledKey) }
+
+    static var phoneBatteryPath: String {
+        get {
+            let stored = UserDefaults.standard.string(forKey: phoneBatteryPathKey) ?? ""
+            return stored.isEmpty ? defaultPhoneBatteryPath : stored
+        }
+        set { UserDefaults.standard.set(newValue, forKey: phoneBatteryPathKey) }
+    }
+
+    static var defaultPhoneBatteryPath: String {
+        NSHomeDirectory() + "/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/battery.json"
+    }
 
     /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).
     static var calendarBlocks: [String: CalendarBlock] {
