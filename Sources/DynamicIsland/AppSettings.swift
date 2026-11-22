@@ -7,6 +7,8 @@ enum AppSettings {
     static let eventAlertLeadKey = "eventAlertLeadMinutes"
     static let eventAlertTrailKey = "eventAlertTrailMinutes"
     static let eventAlertSoundKey = "eventAlertSound"
+    static let lowBatteryAlertKey = "lowBatteryAlert"
+    static let lowBatteryThresholdKey = "lowBatteryThresholdPercent"
     static let languageKey = "language"
 
     static func registerDefaults() {
@@ -17,6 +19,8 @@ enum AppSettings {
             eventAlertLeadKey: 5,
             eventAlertTrailKey: 5,
             eventAlertSoundKey: true,
+            lowBatteryAlertKey: true,
+            lowBatteryThresholdKey: 20,
             languageKey: AppLanguage.system.rawValue,
         ])
     }
@@ -29,6 +33,9 @@ enum AppSettings {
     /// Minutes after a schedule event starts the signal stays on.
     static var eventAlertTrail: Int { UserDefaults.standard.integer(forKey: eventAlertTrailKey) }
     static var eventAlertSound: Bool { UserDefaults.standard.bool(forKey: eventAlertSoundKey) }
+    /// Warn beside the collapsed notch when an accessory drops to this level and is not charging.
+    static var lowBatteryAlert: Bool { UserDefaults.standard.bool(forKey: lowBatteryAlertKey) }
+    static var lowBatteryThreshold: Int { UserDefaults.standard.integer(forKey: lowBatteryThresholdKey) }
 
     /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).
     static var calendarBlocks: [String: CalendarBlock] {

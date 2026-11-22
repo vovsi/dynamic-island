@@ -18,6 +18,8 @@ final class IslandViewModel: ObservableObject {
     @Published var hasEventAlert = false
     /// Start of the event the alert counts down to.
     @Published var eventAlertStart: Date?
+    /// Accessory that is low on battery and not charging: shown beside the collapsed notch until it charges.
+    @Published var batteryAlert: DeviceBattery?
 
     /// Weather block frame in the island's coordinate space (top-left origin).
     var weatherFrame: CGRect = .zero
@@ -27,6 +29,7 @@ final class IslandViewModel: ObservableObject {
     var onWeatherToggle: () -> Void = {}
     var onKeepAwakePickerToggle: () -> Void = {}
     var onDismissEventAlert: () -> Void = {}
+    var onDismissBatteryAlert: () -> Void = {}
 
     // MARK: - Geometry
 
@@ -35,7 +38,7 @@ final class IslandViewModel: ObservableObject {
     /// Extra height while the 7-day forecast is open below the notch.
     static let weatherExtraHeight: CGFloat = 40
     static let hoverGrowth = CGSize(width: 18, height: 4)
-    /// Width added on each side of the collapsed notch for the event alert (dot / countdown).
+    /// Width added on each side of the collapsed notch for an alert (dot / countdown / battery badge).
     static let alertSideWidth: CGFloat = 46
 
     var isExpanded: Bool { state == .expanded }
@@ -56,7 +59,7 @@ final class IslandViewModel: ObservableObject {
     }
 
     var collapsedSize: CGSize {
-        let alert = hasEventAlert ? 2 * Self.alertSideWidth : 0
+        let alert = (hasEventAlert || batteryAlert != nil) ? 2 * Self.alertSideWidth : 0
         return CGSize(width: notch.size.width + 2 * 6 + alert, height: notch.size.height)
     }
 

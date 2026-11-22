@@ -15,9 +15,21 @@ struct DashboardView: View {
     @ObservedObject private var store = CalendarStore.shared
     @ObservedObject private var keepAwake = KeepAwakeManager.shared
     @ObservedObject private var keyboardLock = KeyboardLockManager.shared
+    @ObservedObject private var batteries = DeviceBatteryStore.shared
 
     private var weatherHeight: CGFloat { max(notchSize.height - 8, 20) }
     private let cardSpacing: CGFloat = 10
+    private let badgeSize: CGFloat = 22
+    private let badgeGap: CGFloat = 8
+
+    /// Room left of the notch; the weather pill and the battery badges share it.
+    private var leftRoom: CGFloat {
+        max((IslandViewModel.expandedWidth - notchSize.width) / 2 - horizontalInset - 8, 60)
+    }
+
+    private var batteryBarWidth: CGFloat {
+        DeviceBatteryBar.width(count: min(batteries.devices.count, DeviceBatteryStore.maxShown), size: badgeSize)
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -33,15 +45,19 @@ struct DashboardView: View {
 
             // Pill stays left of the notch; the forecast covers the Events card below the notch
             // (never under the camera housing, which screenshots do not show).
-            WeatherPill(
-                weather: WeatherStore.shared,
-                isActive: isWeatherExpanded,
-                height: weatherHeight,
-                maxWidth: max((IslandViewModel.expandedWidth - notchSize.width) / 2 - horizontalInset - 8, 60),
-                onToggle: onWeatherToggle,
-                onOpenSettings: onOpenSettings
-            )
-            .reportsWeatherFrame()
+            HStack(spacing: badgeGap) {
+                WeatherPill(
+                    weather: WeatherStore.shared,
+                    isActive: isWeatherExpanded,
+                    height: weatherHeight,
+                    maxWidth: max(leftRoom - (batteryBarWidth > 0 ? batteryBarWidth + badgeGap : 0), 60),
+                    onToggle: onWeatherToggle,
+                    onOpenSettings: onOpenSettings
+                )
+                .reportsWeatherFrame()
+                DeviceBatteryBar(store: batteries, size: badgeSize)
+            }
+            .frame(height: weatherHeight)
             .padding(.top, (notchSize.height - weatherHeight) / 2)
 
             if isWeatherExpanded {

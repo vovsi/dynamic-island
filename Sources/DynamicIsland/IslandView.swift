@@ -46,6 +46,16 @@ struct IslandRootView: View {
                     )
                         .frame(height: viewModel.notch.size.height)
                         .transition(.opacity)
+                } else if let battery = viewModel.batteryAlert {
+                    LowBatteryIndicator(
+                        device: battery,
+                        sideWidth: IslandViewModel.alertSideWidth,
+                        inset: viewModel.topRadius,
+                        isHovering: viewModel.isHovering,
+                        onDismiss: viewModel.onDismissBatteryAlert
+                    )
+                        .frame(height: viewModel.notch.size.height)
+                        .transition(.opacity)
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .top)
@@ -78,19 +88,12 @@ private struct EventAlertIndicator: View {
     let isHovering: Bool
     let onDismiss: () -> Void
 
-    private static let pulsePeriod: TimeInterval = 1.6
     private static let countdownColor = Color(red: 0.3, green: 0.68, blue: 1.0)
 
     var body: some View {
         HStack(spacing: 0) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-                let phase = context.date.timeIntervalSinceReferenceDate / Self.pulsePeriod * 2 * .pi
-                Circle()
-                    .fill(Color.red)
-                    .frame(width: 8, height: 8)
-                    .opacity(0.3 + 0.7 * (0.5 + 0.5 * sin(phase)))
-            }
-            .frame(width: sideWidth)
+            PulsingDot()
+                .frame(width: sideWidth)
 
             Spacer(minLength: 0)
 
@@ -122,6 +125,64 @@ private struct EventAlertIndicator: View {
         }
         .font(.system(size: 13, weight: .semibold))
         .padding(.horizontal, inset)
+    }
+}
+
+// MARK: - Low battery alert
+
+/// Collapsed-island signal for an accessory that needs charging: pulsing red dot on the left, the device
+/// icon inside its (red) battery ring on the right. It stays up until the device is put on a charger;
+/// on hover the badge turns into a close button that hides it until the device charges and drains again.
+private struct LowBatteryIndicator: View {
+    let device: DeviceBattery
+    let sideWidth: CGFloat
+    let inset: CGFloat
+    let isHovering: Bool
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            PulsingDot()
+                .frame(width: sideWidth)
+
+            Spacer(minLength: 0)
+
+            ZStack {
+                if isHovering {
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.white.opacity(0.75))
+                            .frame(width: sideWidth, height: sideWidth)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(tr("Dismiss this alert", "Скрыть напоминание"))
+                    .transition(.opacity)
+                } else {
+                    DeviceBatteryBadge(device: device, size: 22)
+                        .hoverHint(device.label)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: sideWidth)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .padding(.horizontal, inset)
+    }
+}
+
+/// Red dot that breathes once every 1.6 s.
+private struct PulsingDot: View {
+    private static let period: TimeInterval = 1.6
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate / Self.period * 2 * .pi
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .opacity(0.3 + 0.7 * (0.5 + 0.5 * sin(phase)))
+        }
     }
 }
 

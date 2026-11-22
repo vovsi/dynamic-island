@@ -14,6 +14,8 @@ final class IslandController {
     private var dismissedAlertIDs: Set<String> = []
     /// Events the sound was already played for.
     private var announcedAlertIDs: Set<String> = []
+    /// Accessories whose low-battery warning the user closed; they stay silent until charged.
+    private var dismissedBatteryIDs: Set<String> = []
     private var alertSound: NSSound?
 
     private static let alertSoundName = "Glass"
@@ -35,6 +37,7 @@ final class IslandController {
         }
         viewModel.onCollapseRequest = { [weak self] in self?.collapse() }
         viewModel.onDismissEventAlert = { [weak self] in self?.dismissEventAlert() }
+        viewModel.onDismissBatteryAlert = { [weak self] in self?.dismissBatteryAlert() }
         viewModel.onWeatherToggle = { [weak self] in
             guard let self else { return }
             withAnimation(self.weatherAnimation) { self.viewModel.isWeatherExpanded.toggle() }
@@ -57,6 +60,7 @@ final class IslandController {
 
         installMonitors()
         startEventAlerts()
+        startBatteryAlerts()
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -169,6 +173,43 @@ final class IslandController {
     private func stopAlertSound() {
         alertSound?.stop()
         alertSound = nil
+    }
+
+    // MARK: - Low battery alert
+
+    private func startBatteryAlerts() {
+        DeviceBatteryStore.shared.$devices
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateBatteryAlert() } }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateBatteryAlert() } }
+            .store(in: &cancellables)
+        updateBatteryAlert()
+    }
+
+    /// The warning stays up while the device is low and off the charger; once it charges it drops out of
+    /// `draining`, which also clears the dismissal so a later drain warns again.
+    private func updateBatteryAlert() {
+        let draining = AppSettings.lowBatteryAlert
+            ? DeviceBatteryStore.shared.devices.filter(\.needsCharging)
+            : []
+        dismissedBatteryIDs.formIntersection(Set(draining.map(\.id)))
+
+        let target = draining
+            .filter { !dismissedBatteryIDs.contains($0.id) }
+            .min { $0.percent < $1.percent }
+        guard viewModel.batteryAlert != target else { return }
+        withAnimation(alertAnimation) { viewModel.batteryAlert = target }
+        handleMouseMove()
+    }
+
+    /// Hides the warning for this device until it is charged and runs low again.
+    private func dismissBatteryAlert() {
+        guard let current = viewModel.batteryAlert else { return }
+        dismissedBatteryIDs.insert(current.id)
+        updateBatteryAlert()
     }
 
     // MARK: - Mouse tracking

@@ -40,6 +40,7 @@ struct SettingsView: View {
     @ObservedObject private var updates = UpdateManager.shared
     @ObservedObject private var calendars = CalendarStore.shared
     @ObservedObject private var weather = WeatherStore.shared
+    @ObservedObject private var batteries = DeviceBatteryStore.shared
 
     @AppStorage(AppSettings.collapseOnMouseExitKey) private var collapseOnMouseExit = true
     @AppStorage(AppSettings.hapticFeedbackKey) private var hapticFeedback = true
@@ -47,6 +48,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.eventAlertLeadKey) private var eventAlertLead = 5
     @AppStorage(AppSettings.eventAlertTrailKey) private var eventAlertTrail = 5
     @AppStorage(AppSettings.eventAlertSoundKey) private var eventAlertSound = true
+    @AppStorage(AppSettings.lowBatteryAlertKey) private var lowBatteryAlert = true
+    @AppStorage(AppSettings.lowBatteryThresholdKey) private var lowBatteryThreshold = 20
     @AppStorage(AppSettings.languageKey) private var language = AppLanguage.system.rawValue
 
     @StateObject private var state = SettingsState()
@@ -80,6 +83,8 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            batterySection
 
             weatherSection
 
@@ -162,6 +167,43 @@ struct SettingsView: View {
         }
         .frame(width: 520)
         .frame(minHeight: 600)
+    }
+
+    // MARK: - Devices
+
+    @ViewBuilder
+    private var batterySection: some View {
+        Section(tr("Device Battery", "Заряд устройств")) {
+            Toggle(tr("Warn about a low accessory battery", "Предупреждать о низком заряде аксессуара"), isOn: $lowBatteryAlert)
+            Stepper(
+                tr("Warn at \(lowBatteryThreshold)% and below", "Предупреждать при \(lowBatteryThreshold)% и ниже"),
+                value: $lowBatteryThreshold,
+                in: 5...50,
+                step: 5
+            )
+            .disabled(!lowBatteryAlert)
+            if batteries.devices.isEmpty {
+                Text(tr("No connected accessory reports its battery level.", "Ни одно подключённое устройство не сообщает заряд."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(batteries.devices) { device in
+                    LabeledContent(device.name) {
+                        HStack(spacing: 6) {
+                            Text("\(device.percent)%")
+                                .monospacedDigit()
+                                .foregroundStyle(device.needsCharging ? .red : .primary)
+                            if device.isCharging {
+                                Image(systemName: "bolt.fill").foregroundStyle(.green)
+                            }
+                        }
+                    }
+                }
+            }
+            Text(tr("The expanded island shows every connected accessory as an icon inside its battery ring. A device that runs low raises a red dot beside the collapsed notch until it is put on a charger; hover the island and click × to hide it sooner.", "В раскрытом острове каждое подключённое устройство показано иконкой в кольце заряда. Когда заряд падает, рядом с вырезом свёрнутого острова горит красная точка — пока устройство не поставят на зарядку. Наведите курсор и нажмите ×, чтобы скрыть раньше."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Weather
