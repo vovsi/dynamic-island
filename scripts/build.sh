@@ -35,11 +35,17 @@ sed \
     -e "s|__BRANCH__|$BRANCH|g" \
     "$ROOT/Support/Info.plist" > "$APP/Contents/Info.plist"
 
-# A stable identity keeps macOS privacy permissions (Calendar, Location…) across rebuilds;
-# ad-hoc signatures change with every build and reset them.
+# A stable identity keeps macOS privacy permissions (Calendar, Location…) and keychain access
+# across rebuilds; ad-hoc signatures change with every build and reset both. REQUIRE_SIGNING=1
+# (set by the in-app updater) turns the fallback into a failure, so an update never silently
+# downgrades a working install and starts asking for permissions and passwords again.
 SIGN_IDENTITY="${SIGN_IDENTITY:-DynamicIsland Local}"
 if security find-identity -p codesigning 2>/dev/null | grep -qF "\"$SIGN_IDENTITY\""; then
     codesign --force --sign "$SIGN_IDENTITY" "$APP" >/dev/null
+elif [ "${REQUIRE_SIGNING:-0}" = "1" ]; then
+    echo "error: signing identity '$SIGN_IDENTITY' not found." >&2
+    echo "Run ./scripts/create-signing-identity.sh, then update again." >&2
+    exit 1
 else
     echo "warning: signing identity '$SIGN_IDENTITY' not found, using ad-hoc signature (permissions reset on update)" >&2
     codesign --force --sign - "$APP" >/dev/null

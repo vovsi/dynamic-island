@@ -28,7 +28,8 @@ build)
         git clone --branch "$branch" "$repo" "$src"
     fi
 
-    UPDATE_BRANCH="$branch" bash "$src/scripts/build.sh"
+    # An update must keep the signature it had; see the signing block in build.sh.
+    UPDATE_BRANCH="$branch" REQUIRE_SIGNING=1 bash "$src/scripts/build.sh"
     echo "APP_PATH=$src/build/DynamicIsland.app"
     ;;
 
