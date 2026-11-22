@@ -6,6 +6,9 @@ import ServiceManagement
 enum BundleRename {
     static let bundleFileName = "Dynamic Island.app"
 
+    /// Where the running app's bundle lives now; `Bundle.main` keeps the pre-rename path until relaunch.
+    private(set) static var bundleURL = Bundle.main.bundleURL
+
     static func migrateIfNeeded() {
         let current = Bundle.main.bundleURL
         guard current.pathExtension == "app",
@@ -23,6 +26,7 @@ enum BundleRename {
             NSLog("Bundle rename failed: \(error.localizedDescription)")
             return
         }
+        bundleURL = target
         LSRegisterURL(target as CFURL, true)
 
         if loginItemEnabled {

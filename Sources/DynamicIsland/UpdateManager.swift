@@ -94,12 +94,14 @@ final class UpdateManager: ObservableObject {
 
     func performUpdate() async {
         guard !isBusy else { return }
-        guard let script = Bundle.main.url(forResource: "self-update", withExtension: "sh") else {
+        let bundle = BundleRename.bundleURL
+        let script = bundle.appendingPathComponent("Contents/Resources/self-update.sh")
+        guard FileManager.default.fileExists(atPath: script.path) else {
             status = .failed(message: tr("Updater script is missing from the app bundle.", "В бандле приложения нет скрипта обновления."))
             return
         }
 
-        let appPath = Bundle.main.bundlePath
+        let appPath = bundle.path
         guard appPath.hasSuffix(".app") else {
             status = .failed(message: tr("Updates are available only for the bundled app.", "Обновления доступны только для собранного .app."))
             return
