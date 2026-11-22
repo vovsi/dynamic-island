@@ -33,7 +33,7 @@ final class IslandViewModel: ObservableObject {
 
     // MARK: - Geometry
 
-    static let expandedWidth: CGFloat = 680
+    nonisolated static let expandedWidth: CGFloat = 680
     static let expandedContentHeight: CGFloat = 200
     /// Extra height while the 7-day forecast is open below the notch.
     static let weatherExtraHeight: CGFloat = 40

@@ -60,6 +60,7 @@ struct IslandRootView: View {
             }
             .frame(width: size.width, height: size.height, alignment: .top)
             .coordinateSpace(name: Self.coordinateSpace)
+            .environment(\.islandWidth, size.width)
             .clipShape(shape)
         }
         .frame(width: size.width, height: size.height)
