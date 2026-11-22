@@ -227,7 +227,7 @@ struct SettingsView: View {
             }
         }
         phoneStatusRow
-        Text(tr("On the iPhone: Shortcuts → Automation → run \"Get Battery Level\", put it into a Text action as {\"percent\": Battery Level} and save that text to iCloud Drive as the file above (overwrite on, \"Ask where to save\" off). Hourly or on battery-level changes is enough; a level older than 6 hours is ignored.", "На iPhone: Ярлыки → Автоматизация → «Получить уровень заряда», положить его в действие «Текст» как {\"percent\": Уровень заряда} и сохранить этот текст в iCloud Drive в файл выше (перезапись включена, «Спрашивать, куда сохранить» выключено). Достаточно раз в час или при изменении заряда; значение старше 6 часов не показывается."))
+        Text(tr("On the iPhone: Shortcuts → Automation → \"Get Battery Level\" → \"Save File\" into iCloud Drive as the file above (overwrite on, \"Ask where to save\" off) — the file holds just the number. Hourly or on battery-level changes is enough; a level older than 6 hours is ignored.", "На iPhone: Ярлыки → Автоматизация → «Получить уровень заряда» → «Сохранить файл» в iCloud Drive под именем выше (перезапись включена, «Спрашивать, куда сохранить» выключено) — в файле лежит просто число. Достаточно раз в час или при изменении заряда; значение старше 6 часов не показывается."))
             .font(.caption)
             .foregroundStyle(.secondary)
     }

@@ -40,7 +40,8 @@ enum AppSettings {
     static var lowBatteryAlert: Bool { UserDefaults.standard.bool(forKey: lowBatteryAlertKey) }
     static var lowBatteryThreshold: Int { UserDefaults.standard.integer(forKey: lowBatteryThresholdKey) }
 
-    /// iPhone level written to a file by a Shortcuts automation on the phone (iCloud Drive syncs it here).
+    /// iPhone level written as a plain number to a file by a Shortcuts automation on the phone
+    /// (iCloud Drive syncs it here).
     static var phoneBatteryEnabled: Bool { UserDefaults.standard.bool(forKey: phoneBatteryEnabledKey) }
 
     static var phoneBatteryPath: String {
@@ -52,7 +53,7 @@ enum AppSettings {
     }
 
     static var defaultPhoneBatteryPath: String {
-        NSHomeDirectory() + "/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/battery.json"
+        NSHomeDirectory() + "/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/battery.txt"
     }
 
     /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).

@@ -39,10 +39,10 @@ When a device drops to the threshold (Settings → Device Battery, 20% by defaul
 macOS exposes no iPhone battery level to third-party apps, so the phone has to send it. Settings → Device Battery → **Show the iPhone level from a Shortcuts file**, then:
 
 1. **Create Folder** makes `~/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/` (iCloud Drive → DynamicIsland).
-2. On the iPhone: Shortcuts → **Automation** → e.g. *Battery Level* (changes) or *Time of Day* (hourly) → **Get Battery Level** → **Text** with `{"percent": <Battery Level>}` → **Save File** into that folder as `battery.json`, "Overwrite If File Exists" on and "Ask Where to Save" off.
+2. On the iPhone: Shortcuts → **Automation** → e.g. *Battery Level* (changes) or *Time of Day* (hourly) → **Get Battery Level** → **Save File** into that folder as `battery.txt`, "Overwrite If File Exists" on and "Ask Where to Save" off. The file holds just the number.
 3. Back in Settings, **Choose…** the file once (that also grants the app access to it).
 
-A bare `57` works too, as does `{"percent": 57, "name": "iPhone 16", "charging": true, "date": "2026-11-22T13:44:00Z"}`. Levels older than 6 hours are ignored, and without a `charging` flag a level that went up counts as charging — the same rule AirPods get.
+`57`, `57 %` and `0.57` are all read the same way, and a JSON file like `{"percent": 57, "name": "iPhone 16", "charging": true, "date": "2026-11-22T13:44:00Z"}` is accepted as well. Levels older than 6 hours are ignored, and without a `charging` flag a level that went up counts as charging — the same rule AirPods get.
 
 ## Local config and secrets
 

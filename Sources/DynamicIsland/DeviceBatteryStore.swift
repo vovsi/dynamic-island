@@ -118,8 +118,8 @@ final class DeviceBatteryStore: ObservableObject {
     // MARK: - iPhone
 
     /// macOS exposes no iPhone battery level, so the phone writes its own into a file in iCloud Drive
-    /// (a Shortcuts automation); this reads whatever landed there. Accepts `{"percent": 57}` with the
-    /// optional `name`, `charging` and `date` keys, or a bare "57".
+    /// (a Shortcuts automation); this reads whatever landed there. Normally a bare "57", but
+    /// `{"percent": 57}` with the optional `name`, `charging` and `date` keys is accepted too.
     private nonisolated static func phoneReading() -> (Reading?, PhoneStatus) {
         guard AppSettings.phoneBatteryEnabled else { return (nil, .off) }
 
@@ -162,7 +162,7 @@ final class DeviceBatteryStore: ObservableObject {
             let date = ["date", "updated", "timestamp"].compactMap { dictionary[$0] as? String }.first.flatMap(parseDate)
             return (name, clamped(level), charging, date)
         }
-        // A one-action shortcut may just write "57" or "57 %".
+        // The documented shortcut writes just the number: "57", "57 %" or "0.57".
         let text = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "%", with: "")
