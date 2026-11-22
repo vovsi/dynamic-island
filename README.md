@@ -44,6 +44,16 @@ macOS exposes no iPhone battery level to third-party apps, so the phone has to s
 
 `57`, `57 %` and `0.57` are all read the same way, and a JSON file like `{"percent": 57, "name": "iPhone 16", "charging": true, "date": "2026-11-22T13:44:00Z"}` is accepted as well. Levels older than 6 hours are ignored, and without a `charging` flag a level that went up counts as charging — the same rule AirPods get.
 
+### EcoFlow power station
+
+The charge of an EcoFlow station (DELTA 2 and the rest) is read from the EcoFlow IoT Open Platform, so it shows up beside the accessories as one more badge — with the time to full or the time left, and the watts going in or out, in the hover hint.
+
+1. At [developer.ecoflow.com](https://developer.ecoflow.com) sign in with the account the station is registered to and create an **access key** / **secret key** pair.
+2. Settings → EcoFlow → **Show the charge of an EcoFlow power station**, pick the region of that account (Europe or Global — a key from the other region is rejected with error 8513), paste both keys.
+3. **Find** lists the stations on the account; pick one and **Save**.
+
+The keys are kept in the Keychain, never in `UserDefaults` or in the repository. The station is polled every 5 minutes (`GET /iot-open/sign/device/quota/all`, signed with HMAC-SHA256); the level is `bms_emsStatus.lcdShowSoc`, with the BMS values as a fallback.
+
 ## Local config and secrets
 
 Never commit configs or secrets. Preferences live in `UserDefaults`; anything sensitive goes to `~/Library/Application Support/DynamicIsland/` (directory `0700`, files `0600`) or the Keychain.
@@ -60,6 +70,7 @@ Settings → Updates → **Check for Updates** compares the commit the app was b
 - `Sources/DynamicIsland/CalendarStore.swift` — background refresh, split into Events / Schedule.
 - `Sources/DynamicIsland/MacCalendarSource.swift` — EventKit.
 - `Sources/DynamicIsland/WeatherStore.swift`, `WeatherView.swift` — Open-Meteo weather and the weather block.
-- `Sources/DynamicIsland/DeviceBatteryStore.swift`, `DeviceBattery.swift`, `DeviceBatteryView.swift` — accessory and iPhone battery levels, badges and the low-battery alert.
+- `Sources/DynamicIsland/DeviceBatteryStore.swift`, `DeviceBattery.swift`, `DeviceBatteryView.swift` — accessory, iPhone and power-station battery levels, badges and the low-battery alert.
+- `Sources/DynamicIsland/EcoFlowClient.swift`, `EcoFlowService.swift`, `EcoFlowSettingsView.swift`, `Keychain.swift` — signed EcoFlow cloud calls, the cached reading and its settings.
 - `Sources/DynamicIsland/UpdateManager.swift`, `scripts/self-update.sh` — git‑based updater.
 - `Sources/DynamicIsland/SettingsView.swift` — settings window.

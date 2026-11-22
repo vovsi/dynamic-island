@@ -88,6 +88,8 @@ struct SettingsView: View {
 
             batterySection
 
+            EcoFlowSettingsSection(batteries: batteries)
+
             weatherSection
 
             Section(tr("Refresh", "Обновление")) {

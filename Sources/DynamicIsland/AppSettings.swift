@@ -11,6 +11,10 @@ enum AppSettings {
     static let lowBatteryThresholdKey = "lowBatteryThresholdPercent"
     static let phoneBatteryEnabledKey = "phoneBatteryEnabled"
     static let phoneBatteryPathKey = "phoneBatteryPath"
+    static let ecoFlowEnabledKey = "ecoFlowEnabled"
+    static let ecoFlowSerialKey = "ecoFlowSerial"
+    static let ecoFlowNameKey = "ecoFlowName"
+    static let ecoFlowRegionKey = "ecoFlowRegion"
     static let languageKey = "language"
 
     static func registerDefaults() {
@@ -24,6 +28,8 @@ enum AppSettings {
             lowBatteryAlertKey: true,
             lowBatteryThresholdKey: 20,
             phoneBatteryEnabledKey: false,
+            ecoFlowEnabledKey: false,
+            ecoFlowRegionKey: EcoFlowClient.Region.europe.rawValue,
             languageKey: AppLanguage.system.rawValue,
         ])
     }
@@ -54,6 +60,54 @@ enum AppSettings {
 
     static var defaultPhoneBatteryPath: String {
         NSHomeDirectory() + "/Library/Mobile Documents/com~apple~CloudDocs/DynamicIsland/battery.txt"
+    }
+
+    // MARK: - EcoFlow
+
+    /// Charge of an EcoFlow power station, read from the EcoFlow IoT Open Platform.
+    /// The two API keys live in the Keychain, never in `UserDefaults`.
+    static var ecoFlowEnabled: Bool { UserDefaults.standard.bool(forKey: ecoFlowEnabledKey) }
+
+    static let ecoFlowAccessKeyAccount = "ecoflow.accessKey"
+    static let ecoFlowSecretKeyAccount = "ecoflow.secretKey"
+
+    static var ecoFlowSerial: String {
+        get { UserDefaults.standard.string(forKey: ecoFlowSerialKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: ecoFlowSerialKey) }
+    }
+
+    /// Name shown in the island; empty falls back to the product name.
+    static var ecoFlowName: String {
+        get { UserDefaults.standard.string(forKey: ecoFlowNameKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: ecoFlowNameKey) }
+    }
+
+    static var ecoFlowRegion: EcoFlowClient.Region {
+        get { EcoFlowClient.Region(rawValue: UserDefaults.standard.string(forKey: ecoFlowRegionKey) ?? "") ?? .europe }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: ecoFlowRegionKey) }
+    }
+
+    /// Whether both API keys are already in the Keychain.
+    static var ecoFlowConfigKeysStored: Bool {
+        Keychain.has(ecoFlowAccessKeyAccount) && Keychain.has(ecoFlowSecretKeyAccount)
+    }
+
+    /// Everything a poll needs, or `nil` while any of it is missing.
+    static var ecoFlowConfig: EcoFlowService.Config? {
+        guard let accessKey = Keychain.string(ecoFlowAccessKeyAccount),
+              let secretKey = Keychain.string(ecoFlowSecretKeyAccount)
+        else { return nil }
+        let serial = ecoFlowSerial
+        guard !serial.isEmpty else { return nil }
+
+        let name = ecoFlowName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return EcoFlowService.Config(
+            region: ecoFlowRegion,
+            accessKey: accessKey,
+            secretKey: secretKey,
+            serial: serial,
+            name: name.isEmpty ? "EcoFlow" : name
+        )
     }
 
     /// Per-calendar block chosen in Settings (EventKit calendar identifier → block).

@@ -1,10 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Battery level of one connected Apple/Bluetooth accessory (mouse, keyboard, trackpad, headphones, case).
+/// Battery level of one device the island watches: a connected Apple/Bluetooth accessory
+/// (mouse, keyboard, trackpad, headphones, case), the iPhone, or an EcoFlow power station.
 struct DeviceBattery: Identifiable, Equatable {
     enum Kind: Int {
         case phone
+        case powerStation
         case mouse
         case keyboard
         case trackpad
@@ -23,6 +25,8 @@ struct DeviceBattery: Identifiable, Equatable {
     let percent: Int
     /// Reported by the accessory, or inferred from a level that went up since the last reading.
     let isCharging: Bool
+    /// Extra line for the hover hint, e.g. the time a power station has left.
+    var detail: String? = nil
 
     var isLow: Bool { percent <= AppSettings.lowBatteryThreshold }
     /// Low and not plugged in: worth warning about.
@@ -30,10 +34,12 @@ struct DeviceBattery: Identifiable, Equatable {
 
     var tint: Color { isLow ? .red : .green }
 
-    /// Short label for hover hints: "Magic Mouse — 87%".
+    /// Short label for hover hints: "Magic Mouse — 87% · charging".
     var label: String {
-        let suffix = isCharging ? tr(" · charging", " · заряжается") : ""
-        return "\(name) — \(percent)%\(suffix)"
+        var parts = ["\(name) — \(percent)%"]
+        if isCharging { parts.append(tr("charging", "заряжается")) }
+        if let detail, !detail.isEmpty { parts.append(detail) }
+        return parts.joined(separator: " · ")
     }
 
     static func order(_ a: DeviceBattery, _ b: DeviceBattery) -> Bool {
@@ -51,6 +57,8 @@ extension DeviceBattery {
         switch kind {
         case .phone:
             return Self.symbol(["iphone", "iphone.gen3"])
+        case .powerStation:
+            return Self.symbol(["powerplug.portable.fill", "minus.plus.batteryblock.fill", "powerplug.fill", "bolt.batteryblock.fill"])
         case .mouse:
             return Self.symbol(["computermouse.fill", "magicmouse.fill", "cursorarrow.click"])
         case .keyboard:

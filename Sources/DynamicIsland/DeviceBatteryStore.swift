@@ -4,9 +4,9 @@ import IOKit
 
 /// Battery levels of the Bluetooth accessories paired with this Mac, refreshed in the background.
 ///
-/// Two sources, merged by device name: the IORegistry (Magic Mouse / Keyboard / Trackpad report
-/// `BatteryPercent` there) and `system_profiler SPBluetoothDataType` (AirPods report left/right/case there).
-/// Neither needs any permission.
+/// Three sources, merged by device name: the IORegistry (Magic Mouse / Keyboard / Trackpad report
+/// `BatteryPercent` there), `system_profiler SPBluetoothDataType` (AirPods report left/right/case there)
+/// and, when it is set up, the EcoFlow cloud for a power station. Only the last one needs credentials.
 @MainActor
 final class DeviceBatteryStore: ObservableObject {
     static let shared = DeviceBatteryStore()
@@ -17,6 +17,8 @@ final class DeviceBatteryStore: ObservableObject {
     @Published private(set) var devices: [DeviceBattery] = []
     /// What the iPhone file looks like right now, for the Settings window.
     @Published private(set) var phoneStatus: PhoneStatus = .off
+    /// What the last EcoFlow poll ended with, for the Settings window.
+    @Published private(set) var ecoFlowStatus: EcoFlowStatus = .off
 
     /// State of the file a Shortcuts automation on the iPhone writes into iCloud Drive.
     enum PhoneStatus: Equatable {
@@ -68,10 +70,11 @@ final class DeviceBatteryStore: ObservableObject {
     func refresh() {
         guard task == nil else { return }
         task = Task { [weak self] in
-            let (collected, phoneStatus) = await Self.collect()
+            let (collected, phoneStatus, ecoFlowStatus) = await Self.collect()
             guard let self else { return }
             self.apply(collected)
             if self.phoneStatus != phoneStatus { self.phoneStatus = phoneStatus }
+            if self.ecoFlowStatus != ecoFlowStatus { self.ecoFlowStatus = ecoFlowStatus }
             self.task = nil
         }
     }
@@ -87,7 +90,8 @@ final class DeviceBatteryStore: ObservableObject {
                     name: reading.name,
                     kind: reading.kind,
                     percent: reading.percent,
-                    isCharging: reading.isCharging || climbed
+                    isCharging: reading.isCharging || climbed,
+                    detail: reading.detail
                 )
             }
             .sorted(by: DeviceBattery.order)
@@ -103,16 +107,63 @@ final class DeviceBatteryStore: ObservableObject {
         let kind: DeviceBattery.Kind
         let percent: Int
         let isCharging: Bool
+        var detail: String? = nil
     }
 
-    private static func collect() async -> ([Reading], PhoneStatus) {
+    private static func collect() async -> ([Reading], PhoneStatus, EcoFlowStatus) {
         var byID: [String: Reading] = [:]
         // The IORegistry reports a charging flag, so it wins over system_profiler for the same device.
         for reading in await bluetoothReadings() { byID[reading.id] = reading }
         for reading in hidReadings() { byID[reading.id] = reading }
         let (phone, phoneStatus) = phoneReading()
         if let phone { byID[phone.id] = phone }
-        return (Array(byID.values), phoneStatus)
+        let (station, ecoFlowStatus) = await ecoFlowReading()
+        if let station { byID[station.id] = station }
+        return (Array(byID.values), phoneStatus, ecoFlowStatus)
+    }
+
+    // MARK: - EcoFlow
+
+    /// Charge of the power station, from the reading `EcoFlowService` keeps cached.
+    private nonisolated static func ecoFlowReading() async -> (Reading?, EcoFlowStatus) {
+        let (reading, name, status) = await EcoFlowService.shared.current()
+        guard let reading else { return (nil, status) }
+        return (
+            Reading(
+                // Prefixed so a station never collides with an accessory of the same name.
+                id: "ecoflow:" + identifier(name),
+                name: name,
+                kind: .powerStation,
+                percent: reading.percent,
+                isCharging: reading.isCharging,
+                detail: ecoFlowDetail(reading)
+            ),
+            status
+        )
+    }
+
+    /// "2 h 15 min to full · +380 W" under the hover hint.
+    private nonisolated static func ecoFlowDetail(_ reading: EcoFlowClient.Reading) -> String? {
+        var parts: [String] = []
+        if let minutes = reading.remainingMinutes {
+            parts.append(reading.isCharging
+                ? tr("\(duration(minutes)) to full", "\(duration(minutes)) до полного")
+                : tr("\(duration(minutes)) left", "осталось \(duration(minutes))"))
+        }
+        if reading.isCharging, reading.wattsIn > 0 {
+            parts.append("+\(reading.wattsIn) " + tr("W", "Вт"))
+        } else if reading.wattsOut > 0 {
+            parts.append("\(reading.wattsOut) " + tr("W", "Вт"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private nonisolated static func duration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let rest = minutes % 60
+        if hours == 0 { return tr("\(rest) min", "\(rest) мин") }
+        if rest == 0 { return tr("\(hours) h", "\(hours) ч") }
+        return tr("\(hours) h \(rest) min", "\(hours) ч \(rest) мин")
     }
 
     // MARK: - iPhone
