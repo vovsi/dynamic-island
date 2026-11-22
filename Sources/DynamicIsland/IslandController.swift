@@ -96,28 +96,33 @@ final class IslandController {
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateEventAlert() } }
             .store(in: &cancellables)
 
-        let timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.updateEventAlert() }
         }
-        timer.tolerance = 2
+        timer.tolerance = 0.2
         alertTimer = timer
         updateEventAlert()
     }
 
-    /// IDs of timed schedule events within [start − lead, start + trail).
-    private func eventsInAlertWindow() -> Set<String> {
-        let now = Date()
+    /// Timed schedule events within [start − lead, start + trail).
+    private func alertWindowEvents(now: Date = Date()) -> [DayEvent] {
         let lead = TimeInterval(max(AppSettings.eventAlertLead, 0) * 60)
         let trail = TimeInterval(max(AppSettings.eventAlertTrail, 0) * 60)
-        return Set(CalendarStore.shared.schedule.filter { event in
+        return CalendarStore.shared.schedule.filter { event in
             !event.isAllDay
                 && event.start.addingTimeInterval(-lead) <= now
                 && now < event.start.addingTimeInterval(trail)
-        }.map(\.id))
+        }
+    }
+
+    private func eventsInAlertWindow() -> Set<String> {
+        Set(alertWindowEvents().map(\.id))
     }
 
     private func updateEventAlert() {
-        let inWindow = eventsInAlertWindow()
+        let now = Date()
+        let windowEvents = alertWindowEvents(now: now)
+        let inWindow = Set(windowEvents.map(\.id))
         dismissedAlertIDs.formIntersection(inWindow)
         announcedAlertIDs.formIntersection(inWindow)
 
@@ -126,6 +131,12 @@ final class IslandController {
             announcedAlertIDs.formUnion(pending)
             playAlertSound()
         }
+
+        // Count down to the nearest upcoming event; once all have started, show the latest started one.
+        let pendingEvents = windowEvents.filter { pending.contains($0.id) }
+        let upcoming = pendingEvents.filter { $0.start > now }.map(\.start).min()
+        let target = upcoming ?? pendingEvents.map(\.start).max()
+        if viewModel.eventAlertStart != target { viewModel.eventAlertStart = target }
 
         let active = !pending.isEmpty
         guard active != viewModel.hasEventAlert else { return }

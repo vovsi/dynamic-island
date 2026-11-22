@@ -16,6 +16,8 @@ final class IslandViewModel: ObservableObject {
     @Published var isKeepAwakePickerOpen = false
     /// A schedule event is about to start (or has just started): shown beside the collapsed notch.
     @Published var hasEventAlert = false
+    /// Start of the event the alert counts down to.
+    @Published var eventAlertStart: Date?
 
     /// Weather block frame in the island's coordinate space (top-left origin).
     var weatherFrame: CGRect = .zero
@@ -33,8 +35,8 @@ final class IslandViewModel: ObservableObject {
     /// Extra height while the 7-day forecast is open below the notch.
     static let weatherExtraHeight: CGFloat = 40
     static let hoverGrowth = CGSize(width: 18, height: 4)
-    /// Width added on each side of the collapsed notch for the event alert icons.
-    static let alertSideWidth: CGFloat = 30
+    /// Width added on each side of the collapsed notch for the event alert (dot / countdown).
+    static let alertSideWidth: CGFloat = 46
 
     var isExpanded: Bool { state == .expanded }
 

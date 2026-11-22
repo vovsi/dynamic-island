@@ -36,8 +36,9 @@ struct IslandRootView: View {
                     )
                     .id(language)
                     .transition(.islandContent)
-                } else if viewModel.hasEventAlert {
+                } else if viewModel.hasEventAlert, let eventStart = viewModel.eventAlertStart {
                     EventAlertIndicator(
+                        eventStart: eventStart,
                         sideWidth: IslandViewModel.alertSideWidth,
                         inset: viewModel.topRadius,
                         isHovering: viewModel.isHovering,
@@ -68,15 +69,17 @@ struct IslandRootView: View {
 
 // MARK: - Event alert
 
-/// Collapsed-island signal for a schedule event: pulsing red dot on the left, blue schedule icon on the right.
-/// On hover the right icon turns into a close button that dismisses the current alert.
+/// Collapsed-island signal for a schedule event: pulsing red dot on the left, mm:ss countdown to the start on the right
+/// (blue, red once it hits 00:00). On hover the countdown turns into a close button that dismisses the current alert.
 private struct EventAlertIndicator: View {
+    let eventStart: Date
     let sideWidth: CGFloat
     let inset: CGFloat
     let isHovering: Bool
     let onDismiss: () -> Void
 
     private static let pulsePeriod: TimeInterval = 1.6
+    private static let countdownColor = Color(red: 0.3, green: 0.68, blue: 1.0)
 
     var body: some View {
         HStack(spacing: 0) {
@@ -103,9 +106,16 @@ private struct EventAlertIndicator: View {
                     .help(tr("Dismiss this alert", "Скрыть напоминание"))
                     .transition(.opacity)
                 } else {
-                    Image(systemName: "clock.fill")
-                        .foregroundStyle(.blue)
-                        .transition(.opacity)
+                    // Ticks aligned to the event start so the display flips exactly on whole seconds.
+                    TimelineView(.periodic(from: eventStart.addingTimeInterval(-86_400), by: 1)) { context in
+                        let remaining = max(0, Int(ceil(eventStart.timeIntervalSince(context.date))))
+                        Text(String(format: "%02d:%02d", remaining / 60, remaining % 60))
+                            .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(remaining > 0 ? Self.countdownColor : .red)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                    .transition(.opacity)
                 }
             }
             .frame(width: sideWidth)
