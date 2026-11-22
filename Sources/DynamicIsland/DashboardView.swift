@@ -17,9 +17,12 @@ struct DashboardView: View {
     @ObservedObject private var keyboardLock = KeyboardLockManager.shared
     @ObservedObject private var batteries = DeviceBatteryStore.shared
 
-    private var weatherHeight: CGFloat { max(notchSize.height - 8, 20) }
+    /// Top row fills the notch's height, leaving a hairline of black above and below.
+    private var rowHeight: CGFloat { max(notchSize.height - 6, 20) }
+    private var weatherHeight: CGFloat { rowHeight }
     private let cardSpacing: CGFloat = 10
-    private let badgeSize: CGFloat = 22
+    /// Battery badges and header buttons share one size so the row reads as a single strip.
+    private var badgeSize: CGFloat { min(rowHeight, 30) }
     private let badgeGap: CGFloat = 8
 
     /// Room left of the notch; the weather pill and the battery badges share it.
@@ -28,7 +31,11 @@ struct DashboardView: View {
     }
 
     private var batteryBarWidth: CGFloat {
-        DeviceBatteryBar.width(count: min(batteries.devices.count, DeviceBatteryStore.maxShown), size: badgeSize)
+        DeviceBatteryBar.width(
+            count: min(batteries.devices.count, DeviceBatteryStore.maxShown),
+            size: badgeSize,
+            spacing: badgeSize * 0.22
+        )
     }
 
     var body: some View {
@@ -55,7 +62,7 @@ struct DashboardView: View {
                     onOpenSettings: onOpenSettings
                 )
                 .reportsWeatherFrame()
-                DeviceBatteryBar(store: batteries, size: badgeSize)
+                DeviceBatteryBar(store: batteries, size: badgeSize, spacing: badgeSize * 0.22)
             }
             .frame(height: weatherHeight)
             .padding(.top, (notchSize.height - weatherHeight) / 2)
@@ -85,12 +92,12 @@ struct DashboardView: View {
 
     /// Top row sits beside the camera housing.
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: badgeGap * 0.75) {
             Spacer(minLength: 0)
             Button(action: keyboardLock.toggle) {
                 TouchpadIcon(color: keyboardLock.isLocked ? .orange : .white.opacity(0.75))
-                    .frame(width: 13, height: 11)
-                    .frame(width: 24, height: 24)
+                    .frame(width: badgeSize * 0.54, height: badgeSize * 0.46)
+                    .frame(width: badgeSize, height: badgeSize)
                     .background(Circle().fill(.white.opacity(keyboardLock.isLocked ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
@@ -98,7 +105,7 @@ struct DashboardView: View {
             if let end = keepAwake.endDate {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(KeepAwakeManager.remainingText(until: end, now: context.date))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: badgeSize * 0.42, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(.orange)
                         .lineLimit(1)
@@ -108,21 +115,21 @@ struct DashboardView: View {
             }
             Button(action: onKeepAwakePickerToggle) {
                 TabletIcon(color: keepAwake.isActive ? .orange : .white.opacity(0.75))
-                    .frame(width: 11, height: 11)
-                    .frame(width: 24, height: 24)
+                    .frame(width: badgeSize * 0.46, height: badgeSize * 0.46)
+                    .frame(width: badgeSize, height: badgeSize)
                     .background(Circle().fill(.white.opacity(isKeepAwakePickerOpen ? 0.2 : 0.1)))
             }
             .buttonStyle(.plain)
             .hoverHint(tr("Anti-sleep", "Антисон"))
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: badgeSize * 0.5, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
-                    .frame(width: 24, height: 24)
+                    .frame(width: badgeSize, height: badgeSize)
                     .background(Circle().fill(.white.opacity(0.1)))
                     .overlay(alignment: .topTrailing) {
                         if updateAvailable {
-                            Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+                            Circle().fill(Color.accentColor).frame(width: badgeSize * 0.29, height: badgeSize * 0.29)
                         }
                     }
             }

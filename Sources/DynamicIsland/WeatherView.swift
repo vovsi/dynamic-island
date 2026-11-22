@@ -28,27 +28,27 @@ struct WeatherPill: View {
             if let current = weather.current {
                 Image(systemName: WeatherCondition.symbol(code: current.code, isDay: current.isDay))
                     .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 12))
+                    .font(.system(size: 15))
                 Text(Self.degrees(current.temperature))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                 if let city = weather.city {
                     Text(city)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                 }
             } else {
                 Image(systemName: weather.status == .needsLocation ? "location.slash" : "cloud")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(weather.status == .loading ? tr("Weather…", "Погода…") : tr("Set location", "Указать город"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 11)
         .frame(maxWidth: maxWidth, maxHeight: .infinity, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
     }
