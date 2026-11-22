@@ -5,7 +5,9 @@ import Foundation
 /// and a secret key; the station itself stays on the EcoFlow cloud).
 ///
 /// Every call is a signed GET: the query parameters, sorted by key, followed by `accessKey`, `nonce`
-/// and `timestamp`, signed with HMAC-SHA256 and sent as the `sign` header.
+/// and `timestamp`, signed with HMAC-SHA256 and sent as the `sign` header. The platform's own test
+/// vector (`…&accessKey=Fp4SvIprYSDPXtYJidEtUAd1o&nonce=345164&timestamp=1671171709428` signed with
+/// `WIbFEKre0s6sLnh4ei7SPUeYnptHG6V` → `07c13b65e037…1473e`) reproduces with this code.
 struct EcoFlowClient {
     /// Hosts the platform serves; an account registered in one region is rejected by the other.
     enum Region: String, CaseIterable, Identifiable {
@@ -129,7 +131,9 @@ struct EcoFlowClient {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // No Content-Type on purpose: with "application/json" the platform looks for the signed
+        // parameters in the request body and ignores the query string, so `sn` drops out of what it
+        // signs and every call with a parameter comes back as "signature is wrong".
         for (field, value) in signed.headers { request.setValue(value, forHTTPHeaderField: field) }
 
         let (data, response) = try await URLSession.shared.data(for: request)
