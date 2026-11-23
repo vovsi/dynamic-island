@@ -9,7 +9,8 @@ final class IslandController {
     private var monitors: [Any] = []
     private var collapseWorkItem: DispatchWorkItem?
     private var alertTimer: Timer?
-    private var hoverPollTimer: Timer?
+    /// Matches `NotchPanel`'s initial state; see `setPanelIgnoresMouse`.
+    private var panelIgnoresMouse = true
     private var wakeObserver: NSObjectProtocol?
     private var cancellables: Set<AnyCancellable> = []
     /// Events (`DayEvent.id`) whose alert the user closed; they stay silent until their window ends.
@@ -25,8 +26,6 @@ final class IslandController {
     private static let alertSoundName = "Glass"
     /// Re-check interval while an alert is on screen.
     private static let alertTickInterval: TimeInterval = 1
-    /// How often the cursor is located while it rests on the island; see `startHoverPoll()`.
-    private static let hoverPollInterval: TimeInterval = 0.1
     private static let alertSoundDuration: TimeInterval = 2
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
@@ -60,8 +59,6 @@ final class IslandController {
             self?.expand()
         }))
         host.sizingOptions = []
-        host.onMouseEntered = { [weak self] in self?.handleMouseEntered() }
-        host.onMouseExited = { [weak self] in self?.handleMouseMove() }
         panel.contentView = host
         self.panel = panel
 
@@ -290,69 +287,50 @@ final class IslandController {
     // MARK: - Mouse tracking
 
     private func installMonitors() {
-        // Mouse moves are not monitored: the island hears about the cursor from its tracking area and
-        // then polls while it is near, which leaves the rest of the screen alone.
+        let moveMask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: moveMask, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleMouseMove() }
+        }) {
+            monitors.append(global)
+        }
+
+        if let local = NSEvent.addLocalMonitorForEvents(matching: moveMask, handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.handleMouseMove() }
+            return event
+        }) {
+            monitors.append(local)
+        }
+
         // Clicks outside our window arrive only through the global monitor.
         if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.handleOutsideClick() }
         }) {
             monitors.append(clicks)
         }
-
-        // While the island is open it casts a shadow, and a click on that shadow is a click on our own
-        // window, so the global monitor never sees it. It still means "close".
-        if let ownClicks = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.handleOutsideClick() }
-            return event
-        }) {
-            monitors.append(ownClicks)
-        }
     }
 
-    /// Follows the cursor while it is on the island, or while the island is open. `mouseExited` alone is
-    /// not enough: the island grows under the cursor on hover, and the panel's transparent padding is not
-    /// part of its hit test, so the crossings the tracking area reports do not map cleanly onto the island's
-    /// own edge. A few seconds of polling at 10 Hz still costs a fraction of a monitor woken by every move.
-    private func startHoverPoll() {
-        guard hoverPollTimer == nil else { return }
-        let timer = Timer.scheduledTimer(withTimeInterval: Self.hoverPollInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handleMouseMove() }
-        }
-        timer.tolerance = 0.03
-        hoverPollTimer = timer
-    }
-
-    private func stopHoverPoll() {
-        hoverPollTimer?.invalidate()
-        hoverPollTimer = nil
-    }
-
-    /// The tracking area covers the whole panel, which is wider and taller than the island itself, so the
-    /// cursor can be inside it without touching the island. Polling starts either way and stops itself
-    /// once the cursor is away.
-    private func handleMouseEntered() {
-        startHoverPoll()
-        handleMouseMove()
+    /// Mirror of the panel's `ignoresMouseEvents`. Writing that property is a round trip to the window
+    /// server, and a mouse move arrives a few hundred times a second, so it is only written on a real flip.
+    private func setPanelIgnoresMouse(_ ignores: Bool) {
+        guard ignores != panelIgnoresMouse else { return }
+        panelIgnoresMouse = ignores
+        panel?.ignoresMouseEvents = ignores
     }
 
     private func handleMouseMove() {
-        let location = NSEvent.mouseLocation
-        let inside = viewModel.hitRect.contains(location)
+        let inside = viewModel.hitRect.contains(NSEvent.mouseLocation)
+        setPanelIgnoresMouse(!inside)
 
         switch viewModel.state {
         case .collapsed:
             if inside != viewModel.isHovering {
                 withAnimation(hoverAnimation) { viewModel.isHovering = inside }
             }
-            // Polling ends at the panel's edge rather than the island's: the cursor is still worth
-            // following across the transparent padding, and a missed `mouseExited` cannot leave the
-            // timer running once the cursor is out of the panel for good.
-            if !inside, !(panel?.frame.contains(location) ?? false) { stopHoverPoll() }
         case .expanded:
-            startHoverPoll()
             // The expanded weather block shrinks back once the cursor leaves it.
             if viewModel.isWeatherExpanded,
-               !viewModel.weatherScreenRect.insetBy(dx: -4, dy: -4).contains(location) {
+               !viewModel.weatherScreenRect.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation) {
                 withAnimation(weatherAnimation) { viewModel.isWeatherExpanded = false }
             }
             if inside {
@@ -380,7 +358,7 @@ final class IslandController {
             viewModel.state = .expanded
             viewModel.isHovering = false
         }
-        startHoverPoll()
+        setPanelIgnoresMouse(false)
     }
 
     private func collapse() {
