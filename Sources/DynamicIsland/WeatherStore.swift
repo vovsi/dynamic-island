@@ -8,6 +8,9 @@ import SwiftUI
 final class WeatherStore: NSObject, ObservableObject {
     static let shared = WeatherStore()
     static let refreshInterval: TimeInterval = 60 * 60
+    /// Backoff after a failed refresh. An hour is a long time to show an empty pill because the network
+    /// was not up yet at launch, or because the service blinked.
+    private static let retryDelays: [TimeInterval] = [20, 60, 300]
 
     private static let locationPrivacyURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices"
@@ -51,6 +54,9 @@ final class WeatherStore: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
+    private var retryTimer: Timer?
+    /// How many backoff steps the current run of failures has used up.
+    private var retryAttempt = 0
     /// Location the cached `city` name was resolved for.
     private var geocodedLocation: CLLocation?
     private var manualPlace: (query: String, name: String, latitude: Double, longitude: Double)?
@@ -77,7 +83,11 @@ final class WeatherStore: NSObject, ObservableObject {
         refresh()
     }
 
-    func refresh() {
+    /// `resettingRetries` is false only for the backoff timer's own call, so a run of failures keeps
+    /// walking down the delays instead of restarting at the shortest one.
+    func refresh(resettingRetries: Bool = true) {
+        if resettingRetries { clearRetries() }
+
         let manualCity = AppSettings.weatherCity
         if !manualCity.isEmpty {
             Task { await loadManualCity(manualCity) }
@@ -108,6 +118,34 @@ final class WeatherStore: NSObject, ObservableObject {
         NSWorkspace.shared.open(Self.locationPrivacyURL)
     }
 
+    // MARK: - Failures
+
+    /// Reports the failure and lines up another attempt; the backoff gives up after the last delay,
+    /// leaving the hourly refresh to try again.
+    private func fail(_ message: String) {
+        status = .failed(message)
+
+        guard retryTimer == nil, retryAttempt < Self.retryDelays.count else { return }
+        let delay = Self.retryDelays[retryAttempt]
+        retryAttempt += 1
+
+        let timer = Timer(timeInterval: delay, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                WeatherStore.shared.retryTimer = nil
+                WeatherStore.shared.refresh(resettingRetries: false)
+            }
+        }
+        timer.tolerance = delay / 4
+        RunLoop.main.add(timer, forMode: .common)
+        retryTimer = timer
+    }
+
+    private func clearRetries() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retryAttempt = 0
+    }
+
     // MARK: - Loading
 
     private func load(location: CLLocation) async {
@@ -128,7 +166,7 @@ final class WeatherStore: NSObject, ObservableObject {
             city = place.name
             await fetchForecast(latitude: place.latitude, longitude: place.longitude)
         } catch {
-            status = .failed(error.localizedDescription)
+            fail(error.localizedDescription)
         }
     }
 
@@ -163,8 +201,13 @@ final class WeatherStore: NSObject, ObservableObject {
 
         do {
             let (data, response) = try await URLSession.shared.data(from: components.url!)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw WeatherError(message: tr("Weather service is unavailable.", "Сервис погоды недоступен."))
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200 else {
+                // Open-Meteo explains itself in the body; without that the message says nothing useful.
+                let reason = (try? JSONDecoder().decode(APIErrorDTO.self, from: data))?.reason
+                throw WeatherError(message: reason.map {
+                    tr("Weather service: \($0) (\(code)).", "Сервис погоды: \($0) (\(code)).")
+                } ?? tr("Weather service is unavailable (\(code)).", "Сервис погоды недоступен (\(code))."))
             }
             let dto = try JSONDecoder().decode(ForecastDTO.self, from: data)
 
@@ -179,9 +222,10 @@ final class WeatherStore: NSObject, ObservableObject {
             days = Self.days(from: dto.daily)
             lastUpdate = Date()
             status = .ready
+            clearRetries()
         } catch {
             // Keep the last forecast; only report the error.
-            status = .failed(error.localizedDescription)
+            fail(error.localizedDescription)
         }
     }
 
@@ -219,7 +263,7 @@ final class WeatherStore: NSObject, ObservableObject {
         if let cached = locationManager.location {
             Task { await load(location: cached) }
         } else if current == nil {
-            status = .failed(message)
+            fail(message)
         }
     }
 }
@@ -327,6 +371,10 @@ private struct ForecastDTO: Decodable {
 
     let current: Current
     let daily: Daily
+}
+
+private struct APIErrorDTO: Decodable {
+    let reason: String
 }
 
 private struct GeocodingDTO: Decodable {
