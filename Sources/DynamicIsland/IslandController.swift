@@ -29,12 +29,13 @@ final class IslandController {
     /// Re-check interval while an alert is on screen.
     private static let alertTickInterval: TimeInterval = 1
     /// Cursor poll while it is nowhere near the island.
-    private static let farPollInterval: TimeInterval = 0.25
+    private static let farPollInterval: TimeInterval = 0.5
     /// Cursor poll near the top of the island's screen, where a late hover would show.
     private static let nearPollInterval: TimeInterval = 0.05
-    /// Band at the top of that screen counted as near. Deep enough that the rate is already up by the
-    /// time the cursor reaches the island.
-    private static let nearBand: CGFloat = 300
+    /// Band at the top of that screen counted as near. Sized against `farPollInterval`: a cursor has to
+    /// outrun it to land on the island while the slow rate is still in effect, which would hold the
+    /// hover back by one slow tick.
+    private static let nearBand: CGFloat = 600
     private static let alertSoundDuration: TimeInterval = 2
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
@@ -334,9 +335,11 @@ final class IslandController {
 
     /// Reads the cursor, then picks the rate for the next reads: fast near the island, slow elsewhere.
     private func pollCursor() {
-        handleMouseMove()
-
+        // Read once and pass it on: `NSEvent.mouseLocation` is a round trip to the window server,
+        // and at poll rates that is the bulk of what the island costs while idle.
         let location = NSEvent.mouseLocation
+        handleMouseMove(location: location)
+
         let screen = viewModel.notch.screenFrame
         let near = viewModel.isExpanded
             || (location.x >= screen.minX && location.x <= screen.maxX
@@ -344,8 +347,10 @@ final class IslandController {
         startCursorPoll(interval: near ? Self.nearPollInterval : Self.farPollInterval)
     }
 
-    private func handleMouseMove() {
-        let inside = viewModel.hitRect.contains(NSEvent.mouseLocation)
+    /// `location` defaults to a fresh reading for the callers that have none at hand; the cursor poll
+    /// passes the one it already read.
+    private func handleMouseMove(location: NSPoint = NSEvent.mouseLocation) {
+        let inside = viewModel.hitRect.contains(location)
         setPanelIgnoresMouse(!inside)
 
         switch viewModel.state {
@@ -356,7 +361,7 @@ final class IslandController {
         case .expanded:
             // The expanded weather block shrinks back once the cursor leaves it.
             if viewModel.isWeatherExpanded,
-               !viewModel.weatherScreenRect.insetBy(dx: -4, dy: -4).contains(NSEvent.mouseLocation) {
+               !viewModel.weatherScreenRect.insetBy(dx: -4, dy: -4).contains(location) {
                 withAnimation(weatherAnimation) { viewModel.isWeatherExpanded = false }
             }
             if inside {
