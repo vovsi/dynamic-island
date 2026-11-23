@@ -16,6 +16,7 @@ enum AppSettings {
     static let ecoFlowNameKey = "ecoFlowName"
     static let ecoFlowRegionKey = "ecoFlowRegion"
     static let languageKey = "language"
+    static let topRowScaleKey = "topRowScale"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -31,12 +32,27 @@ enum AppSettings {
             ecoFlowEnabledKey: false,
             ecoFlowRegionKey: EcoFlowClient.Region.europe.rawValue,
             languageKey: AppLanguage.system.rawValue,
+            topRowScaleKey: defaultTopRowScale,
         ])
     }
 
     static var collapseOnMouseExit: Bool { UserDefaults.standard.bool(forKey: collapseOnMouseExitKey) }
     static var hapticFeedback: Bool { UserDefaults.standard.bool(forKey: hapticFeedbackKey) }
     static var autoCheckUpdates: Bool { UserDefaults.standard.bool(forKey: autoCheckUpdatesKey) }
+
+    /// How much the expanded island's top row (weather, battery badges, header buttons) is scaled
+    /// relative to the notch height.
+    static let topRowScaleRange: ClosedRange<Double> = 0.6...1.6
+    static let defaultTopRowScale = 1.3
+
+    static var topRowScale: CGFloat {
+        clampedTopRowScale(UserDefaults.standard.double(forKey: topRowScaleKey))
+    }
+
+    static func clampedTopRowScale(_ value: Double) -> CGFloat {
+        guard value > 0 else { return CGFloat(defaultTopRowScale) }
+        return CGFloat(min(max(value, topRowScaleRange.lowerBound), topRowScaleRange.upperBound))
+    }
     /// Minutes before a schedule event starts when the collapsed island starts signalling it.
     static var eventAlertLead: Int { UserDefaults.standard.integer(forKey: eventAlertLeadKey) }
     /// Minutes after a schedule event starts the signal stays on.

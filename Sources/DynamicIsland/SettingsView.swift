@@ -53,6 +53,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.phoneBatteryEnabledKey) private var phoneBatteryEnabled = false
     @AppStorage(AppSettings.phoneBatteryPathKey) private var phoneBatteryPath = ""
     @AppStorage(AppSettings.languageKey) private var language = AppLanguage.system.rawValue
+    @AppStorage(AppSettings.topRowScaleKey) private var topRowScale = AppSettings.defaultTopRowScale
 
     @StateObject private var state = SettingsState()
 
@@ -74,6 +75,8 @@ struct SettingsView: View {
                 Toggle(tr("Collapse when cursor leaves the island", "Сворачивать, когда курсор уходит с острова"), isOn: $collapseOnMouseExit)
                 Toggle(tr("Haptic feedback", "Тактильный отклик"), isOn: $hapticFeedback)
             }
+
+            topRowSection
 
             calendarSections
 
@@ -171,6 +174,37 @@ struct SettingsView: View {
         }
         .frame(width: 520)
         .frame(minHeight: 600)
+    }
+
+    // MARK: - Island
+
+    /// Scales the whole first row of the expanded island: weather, battery badges, header buttons.
+    private var topRowSection: some View {
+        Section(tr("Island", "Остров")) {
+            VStack(alignment: .leading, spacing: 4) {
+                LabeledContent(tr("Top row size", "Размер первого ряда")) {
+                    HStack(spacing: 8) {
+                        Text("\(Int((topRowScale * 100).rounded()))%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Button(tr("Reset", "Сбросить")) { topRowScale = AppSettings.defaultTopRowScale }
+                            .disabled(abs(topRowScale - AppSettings.defaultTopRowScale) < 0.001)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "textformat.size.smaller").foregroundStyle(.secondary)
+                    Slider(
+                        value: $topRowScale,
+                        in: AppSettings.topRowScaleRange,
+                        step: 0.05
+                    )
+                    Image(systemName: "textformat.size.larger").foregroundStyle(.secondary)
+                }
+            }
+            Text(tr("Scales the whole top row of the expanded island — weather, device batteries and the buttons beside the notch. The island grows taller with it, so the cards below keep their size.", "Масштабирует весь первый ряд раскрытого острова — погоду, заряд устройств и кнопки рядом с вырезом. Остров становится выше вместе с ним, поэтому карточки ниже сохраняют размер."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Devices

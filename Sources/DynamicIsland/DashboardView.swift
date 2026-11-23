@@ -3,6 +3,7 @@ import SwiftUI
 /// Expanded island: weather, today's events, today's schedule (Google account calendars), settings button.
 struct DashboardView: View {
     let notchSize: CGSize
+    let islandWidth: CGFloat
     let horizontalInset: CGFloat
     let updateAvailable: Bool
     let isWeatherExpanded: Bool
@@ -17,37 +18,40 @@ struct DashboardView: View {
     @ObservedObject private var keyboardLock = KeyboardLockManager.shared
     @ObservedObject private var batteries = DeviceBatteryStore.shared
     @ObservedObject private var weather = WeatherStore.shared
+    /// Redraws the row as soon as the slider in Settings moves.
+    @AppStorage(AppSettings.topRowScaleKey) private var topRowScale = AppSettings.defaultTopRowScale
 
-    /// Top row fills the notch's height, leaving a hairline of black above and below.
-    private var rowHeight: CGFloat { max(notchSize.height - 4, 20) }
+    /// Top row fills the notch's height, scaled by the Settings slider.
+    private var rowHeight: CGFloat { IslandViewModel.topRowHeight(notchHeight: notchSize.height) }
+    /// Band the row occupies: never less than the notch, more once the row is scaled up.
+    private var rowBandHeight: CGFloat { IslandViewModel.topRowBandHeight(notchHeight: notchSize.height) }
+    private var scale: CGFloat { AppSettings.clampedTopRowScale(topRowScale) }
     private var weatherHeight: CGFloat { rowHeight }
     private let cardSpacing: CGFloat = 10
-    private let badgeGap: CGFloat = 8
-    /// Gap between battery badges, as a share of their size.
-    private static let badgeSpacingRatio: CGFloat = 0.22
+    private var badgeGap: CGFloat { IslandViewModel.topRowGap }
     /// The pill asks for exactly what its icon and reading need, so the reading itself is
     /// never the thing that gets ellipsized, and badges keep the rest.
-    private var minWeatherWidth: CGFloat { WeatherPill.minWidth(for: weather.current) }
+    private var minWeatherWidth: CGFloat { WeatherPill.minWidth(for: weather.current, scale: scale) }
 
     /// Header buttons sit right of the notch, where nothing competes for room.
-    private var headerButtonSize: CGFloat { min(rowHeight, 30) }
+    private var headerButtonSize: CGFloat { IslandViewModel.topRowButtonSize(notchHeight: notchSize.height) }
 
     private var badgeCount: CGFloat { CGFloat(min(batteries.devices.count, DeviceBatteryStore.maxShown)) }
 
-    /// Badges match the header buttons, but step down (never below 22) once enough accessories
-    /// are connected to squeeze the weather pill out of its minimum width.
+    /// Badges match the header buttons, but step down (never below 22, scale or no scale) once
+    /// enough accessories are connected to squeeze the weather pill out of its minimum width.
     private var badgeSize: CGFloat {
         guard badgeCount > 0 else { return headerButtonSize }
         let room = leftRoom - minWeatherWidth - badgeGap
-        let fitted = room / (badgeCount * (1 + Self.badgeSpacingRatio) - Self.badgeSpacingRatio)
+        let fitted = room / (badgeCount * (1 + IslandViewModel.badgeSpacingRatio) - IslandViewModel.badgeSpacingRatio)
         return min(headerButtonSize, max(fitted, 22))
     }
 
-    private var badgeSpacing: CGFloat { badgeSize * Self.badgeSpacingRatio }
+    private var badgeSpacing: CGFloat { badgeSize * IslandViewModel.badgeSpacingRatio }
 
     /// Room left of the notch; the weather pill and the battery badges share it.
     private var leftRoom: CGFloat {
-        max((IslandViewModel.expandedWidth - notchSize.width) / 2 - horizontalInset - 8, 60)
+        max((islandWidth - notchSize.width) / 2 - horizontalInset - 8, 60)
     }
 
     private var batteryBarWidth: CGFloat {
@@ -74,6 +78,7 @@ struct DashboardView: View {
                     isActive: isWeatherExpanded,
                     height: weatherHeight,
                     maxWidth: max(leftRoom - (batteryBarWidth > 0 ? batteryBarWidth + badgeGap : 0), 60),
+                    scale: scale,
                     onToggle: onWeatherToggle,
                     onOpenSettings: onOpenSettings
                 )
@@ -81,21 +86,21 @@ struct DashboardView: View {
                 DeviceBatteryBar(store: batteries, size: badgeSize, spacing: badgeSpacing)
             }
             .frame(height: weatherHeight)
-            .padding(.top, (notchSize.height - weatherHeight) / 2)
+            .padding(.top, (rowBandHeight - weatherHeight) / 2)
 
             if isWeatherExpanded {
                 WeatherForecastPanel(weather: WeatherStore.shared, onToggle: onWeatherToggle)
-                    .frame(width: (IslandViewModel.expandedWidth - 2 * horizontalInset - cardSpacing) / 2)
+                    .frame(width: (islandWidth - 2 * horizontalInset - cardSpacing) / 2)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .reportsWeatherFrame()
-                    .padding(.top, notchSize.height + cardSpacing)
+                    .padding(.top, rowBandHeight + cardSpacing)
                     .transition(.scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity))
             }
 
             if isKeepAwakePickerOpen {
                 KeepAwakePicker(manager: keepAwake, onClose: onKeepAwakePickerToggle)
                     .frame(maxWidth: .infinity, alignment: .topTrailing)
-                    .padding(.top, notchSize.height + 4)
+                    .padding(.top, rowBandHeight + 4)
                     .transition(.scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity))
             }
         }
@@ -153,7 +158,7 @@ struct DashboardView: View {
             .buttonStyle(.plain)
             .hoverHint(tr("Settings", "Настройки"))
         }
-        .frame(height: notchSize.height)
+        .frame(height: rowBandHeight)
         .zIndex(1) // hint bubbles hang over the cards below
     }
 }

@@ -24,6 +24,10 @@ Everything comes from macOS Calendar (EventKit) — no API keys or tokens in the
 - Calendars of Google (and other non‑iCloud CalDAV) accounts go to **Schedule**, the rest to **Events**; any calendar can be moved or hidden in Settings.
 - The island refreshes every 5 minutes in the background (also on wake and on Calendar changes). How often macOS syncs Google is set in Calendar → Settings → Accounts.
 
+## Island size
+
+Settings → Island → **Top row size** scales the whole first row of the expanded island (weather pill, device battery badges, the buttons beside the notch) between 60% and 160% (130% by default). The island grows taller along with the row, so the Events and Schedule cards below keep their size. The collapsed island is unaffected.
+
 ## Weather
 
 A small weather pill (city, temperature, condition icon) sits beside the notch; click it for a 7‑day forecast, move the cursor away to shrink it back. Data: [Open-Meteo](https://open-meteo.com) (no API key), refreshed hourly in the background. Location comes from Location Services, or set a city in Settings → Weather (stored in `UserDefaults`, coordinates are not persisted).

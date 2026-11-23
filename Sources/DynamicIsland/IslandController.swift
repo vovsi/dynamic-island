@@ -17,6 +17,8 @@ final class IslandController {
     /// Accessories whose low-battery warning the user closed; they stay silent until charged.
     private var dismissedBatteryIDs: Set<String> = []
     private var alertSound: NSSound?
+    /// Last laid-out island size, so only a real change relays out the panel.
+    private var lastExpandedSize: CGSize = .zero
 
     private static let alertSoundName = "Glass"
     private static let alertSoundDuration: TimeInterval = 2
@@ -59,6 +61,7 @@ final class IslandController {
         panel.orderFrontRegardless()
 
         installMonitors()
+        startGeometryWatch()
         startEventAlerts()
         startBatteryAlerts()
 
@@ -73,10 +76,30 @@ final class IslandController {
 
     // MARK: - Layout
 
+    /// The top-row slider and the number of accessories both change the expanded island's size,
+    /// so the panel is laid out again whenever it differs from the one in place.
+    private func startGeometryWatch() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.syncGeometry() } }
+            .store(in: &cancellables)
+        DeviceBatteryStore.shared.$devices
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.syncGeometry() } }
+            .store(in: &cancellables)
+    }
+
+    private func syncGeometry() {
+        guard viewModel.maxExpandedSize != lastExpandedSize else { return }
+        viewModel.objectWillChange.send()
+        layout()
+    }
+
     private func layout() {
         guard let panel else { return }
         viewModel.notch = NotchGeometry.detect()
         let expanded = viewModel.maxExpandedSize
+        lastExpandedSize = expanded
         let width = expanded.width + shadowPadding * 2
         let height = expanded.height + shadowPadding
         let frame = NSRect(

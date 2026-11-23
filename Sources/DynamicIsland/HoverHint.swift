@@ -89,7 +89,7 @@ private struct HoverHintModifier: ViewModifier {
 /// rather than the control it belongs to.
 private struct IslandWidthKey: EnvironmentKey {
     /// Overridden by `IslandRootView`; the expanded width is only a sane stand-in.
-    static let defaultValue: CGFloat = IslandViewModel.expandedWidth
+    static let defaultValue: CGFloat = IslandViewModel.baseExpandedWidth
 }
 
 extension EnvironmentValues {

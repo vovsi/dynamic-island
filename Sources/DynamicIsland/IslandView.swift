@@ -25,7 +25,8 @@ struct IslandRootView: View {
                 if viewModel.isExpanded {
                     DashboardView(
                         notchSize: viewModel.notch.size,
-                        horizontalInset: viewModel.topRadius + 18,
+                        islandWidth: viewModel.expandedSize.width,
+                        horizontalInset: IslandViewModel.expandedInset,
                         updateAvailable: updates.isUpdateAvailable,
                         isWeatherExpanded: viewModel.isWeatherExpanded,
                         isKeepAwakePickerOpen: viewModel.isKeepAwakePickerOpen,

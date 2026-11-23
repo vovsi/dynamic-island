@@ -33,29 +33,76 @@ final class IslandViewModel: ObservableObject {
 
     // MARK: - Geometry
 
-    nonisolated static let expandedWidth: CGFloat = 680
+    /// Width of the expanded island before the top row asks for more room.
+    nonisolated static let baseExpandedWidth: CGFloat = 680
     static let expandedContentHeight: CGFloat = 200
     /// Extra height while the 7-day forecast is open below the notch.
     static let weatherExtraHeight: CGFloat = 40
     static let hoverGrowth = CGSize(width: 18, height: 4)
     /// Width added on each side of the collapsed notch for an alert (dot / countdown / battery badge).
     static let alertSideWidth: CGFloat = 46
+    /// Corner radius of the expanded island, and the inset its content keeps from the edges.
+    static let expandedTopRadius: CGFloat = 14
+    static let expandedInset: CGFloat = expandedTopRadius + 18
+    /// Gap between battery badges, as a share of their size.
+    static let badgeSpacingRatio: CGFloat = 0.22
 
     var isExpanded: Bool { state == .expanded }
 
-    var topRadius: CGFloat { isExpanded ? 14 : 6 }
+    /// Height of the expanded island's top row: the notch height scaled by the user's setting,
+    /// leaving a hairline of black above and below at scale 1.
+    static func topRowHeight(notchHeight: CGFloat) -> CGFloat {
+        max((notchHeight - 4) * AppSettings.topRowScale, 20)
+    }
+
+    /// Band the top row occupies; it never shrinks below the notch, which has to stay clear,
+    /// and keeps the same hairline above and below the row once the row outgrows it.
+    static func topRowBandHeight(notchHeight: CGFloat) -> CGFloat {
+        max(notchHeight, topRowHeight(notchHeight: notchHeight) + 4)
+    }
+
+    /// Band the top row occupies on the current screen.
+    var topRowBandHeight: CGFloat { Self.topRowBandHeight(notchHeight: notch.size.height) }
+
+    /// Header buttons and battery badges are squares of this size.
+    static func topRowButtonSize(notchHeight: CGFloat) -> CGFloat {
+        min(topRowHeight(notchHeight: notchHeight), 30 * AppSettings.topRowScale)
+    }
+
+    /// Gap between the weather pill, the badges and the buttons.
+    static var topRowGap: CGFloat { 8 * AppSettings.topRowScale }
+
+    /// Accessories shown as badges left of the notch.
+    private var badgeCount: Int { min(DeviceBatteryStore.shared.devices.count, DeviceBatteryStore.maxShown) }
+
+    /// The island widens as the top row is scaled up, so the badges really grow with it instead of
+    /// being squeezed back down by the room left of the notch. Capped by the screen.
+    var expandedWidth: CGFloat {
+        let button = Self.topRowButtonSize(notchHeight: notch.size.height)
+        let count = CGFloat(badgeCount)
+        let badges = count > 0
+            ? count * button + (count - 1) * button * Self.badgeSpacingRatio + Self.topRowGap
+            : 0
+        // Measured for a placeholder reading, so an hourly weather refresh never resizes the island.
+        let left = WeatherPill.minWidth(for: nil, scale: AppSettings.topRowScale) + badges
+        let needed = 2 * (left + Self.expandedInset + 8) + notch.size.width
+        let limit = max(Self.baseExpandedWidth, notch.screenFrame.width - 80)
+        return min(max(Self.baseExpandedWidth, needed), limit)
+    }
+
+    var topRadius: CGFloat { isExpanded ? Self.expandedTopRadius : 6 }
     var bottomRadius: CGFloat { isExpanded ? 34 : 10 }
 
     var expandedSize: CGSize {
         CGSize(
-            width: Self.expandedWidth,
-            height: notch.size.height + Self.expandedContentHeight + (isWeatherExpanded ? Self.weatherExtraHeight : 0)
+            width: expandedWidth,
+            height: topRowBandHeight + Self.expandedContentHeight + (isWeatherExpanded ? Self.weatherExtraHeight : 0)
         )
     }
 
     /// Largest island size; the panel is laid out for it once.
     var maxExpandedSize: CGSize {
-        CGSize(width: Self.expandedWidth, height: notch.size.height + Self.expandedContentHeight + Self.weatherExtraHeight)
+        CGSize(width: expandedWidth, height: topRowBandHeight + Self.expandedContentHeight + Self.weatherExtraHeight)
     }
 
     var collapsedSize: CGSize {

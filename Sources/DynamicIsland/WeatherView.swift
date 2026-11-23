@@ -7,6 +7,8 @@ struct WeatherPill: View {
     let height: CGFloat
     /// Room left of the notch; the pill must never reach under the camera housing.
     let maxWidth: CGFloat
+    /// Top-row scale from Settings; the pill's text and padding grow with the row.
+    var scale: CGFloat = 1
     let onToggle: () -> Void
     let onOpenSettings: () -> Void
 
@@ -24,31 +26,31 @@ struct WeatherPill: View {
     // MARK: - Compact
 
     private var compact: some View {
-        HStack(spacing: Self.gap) {
+        HStack(spacing: gap) {
             if let current = weather.current {
                 conditionIcon(current)
                 Text(Self.degrees(current.temperature))
-                    .font(.system(size: Self.temperatureSize, weight: .semibold, design: .rounded))
+                    .font(.system(size: temperatureSize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(.white)
                 // Dropped whole rather than ellipsized: "Дне…" says less than nothing.
                 if let city = weather.city, fits(city, beside: current) {
                     Text(city)
-                        .font(.system(size: Self.citySize, weight: .medium))
+                        .font(.system(size: citySize, weight: .medium))
                         .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                 }
             } else {
                 Image(systemName: weather.status == .needsLocation ? "location.slash" : "cloud")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13 * scale, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.55))
                 Text(weather.status == .loading ? tr("Weather…", "Погода…") : tr("Set location", "Указать город"))
-                    .font(.system(size: Self.citySize, weight: .medium))
+                    .font(.system(size: citySize, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, Self.sideInset)
+        .padding(.horizontal, sideInset)
         .frame(maxWidth: maxWidth, maxHeight: .infinity, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -56,7 +58,7 @@ struct WeatherPill: View {
     private func conditionIcon(_ current: WeatherStore.Current) -> some View {
         Image(systemName: WeatherCondition.symbol(code: current.code, isDay: current.isDay))
             .symbolRenderingMode(.multicolor)
-            .font(.system(size: Self.iconSize))
+            .font(.system(size: iconSize))
     }
 
     private static let gap: CGFloat = 6
@@ -65,23 +67,29 @@ struct WeatherPill: View {
     private static let temperatureSize: CGFloat = 14
     private static let citySize: CGFloat = 12.5
 
+    private var gap: CGFloat { Self.gap * scale }
+    private var sideInset: CGFloat { Self.sideInset * scale }
+    private var iconSize: CGFloat { Self.iconSize * scale }
+    private var temperatureSize: CGFloat { Self.temperatureSize * scale }
+    private var citySize: CGFloat { Self.citySize * scale }
+
     /// Measured rather than guessed, so the city appears only when it fits whole.
     private func fits(_ city: String, beside current: WeatherStore.Current) -> Bool {
-        let fixed = 2 * Self.sideInset
-            + Self.iconSize * 1.4 // a weather glyph is a little wider than its point size
-            + 2 * Self.gap
-            + Self.width(Self.degrees(current.temperature), size: Self.temperatureSize, weight: .semibold)
-        return fixed + Self.width(city, size: Self.citySize, weight: .medium) <= maxWidth
+        let fixed = 2 * sideInset
+            + iconSize * 1.4 // a weather glyph is a little wider than its point size
+            + 2 * gap
+            + Self.width(Self.degrees(current.temperature), size: temperatureSize, weight: .semibold)
+        return fixed + Self.width(city, size: citySize, weight: .medium) <= maxWidth
     }
 
     /// Width the pill needs for the icon and the reading alone, so whatever shares the row
     /// left of the notch can take exactly what is left over.
-    static func minWidth(for current: WeatherStore.Current?) -> CGFloat {
+    static func minWidth(for current: WeatherStore.Current?, scale: CGFloat = 1) -> CGFloat {
         let reading = current.map { degrees($0.temperature) } ?? "00°"
-        return 2 * sideInset
-            + iconSize * 1.4
-            + gap
-            + width(reading, size: temperatureSize, weight: .semibold)
+        return 2 * sideInset * scale
+            + iconSize * scale * 1.4
+            + gap * scale
+            + width(reading, size: temperatureSize * scale, weight: .semibold)
             + 2 // slack: the rounded digits measure a hair wider than the system face
     }
 
