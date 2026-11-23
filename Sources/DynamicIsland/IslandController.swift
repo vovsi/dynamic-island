@@ -9,6 +9,9 @@ final class IslandController {
     private var monitors: [Any] = []
     private var collapseWorkItem: DispatchWorkItem?
     private var alertTimer: Timer?
+    /// Matches `NotchPanel`'s initial state; see `setPanelIgnoresMouse`.
+    private var panelIgnoresMouse = true
+    private var wakeObserver: NSObjectProtocol?
     private var cancellables: Set<AnyCancellable> = []
     /// Events (`DayEvent.id`) whose alert the user closed; they stay silent until their window ends.
     private var dismissedAlertIDs: Set<String> = []
@@ -21,6 +24,8 @@ final class IslandController {
     private var lastExpandedSize: CGSize = .zero
 
     private static let alertSoundName = "Glass"
+    /// Re-check interval while an alert is on screen.
+    private static let alertTickInterval: TimeInterval = 1
     private static let alertSoundDuration: TimeInterval = 2
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
@@ -123,12 +128,54 @@ final class IslandController {
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateEventAlert() } }
             .store(in: &cancellables)
 
-        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        // A timer that slept through a system sleep fires late, so the state is re-read on wake.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.updateEventAlert() }
         }
-        timer.tolerance = 0.2
-        alertTimer = timer
+
         updateEventAlert()
+    }
+
+    /// Next moment the alert can change on its own: an event entering its lead window, or the current
+    /// one leaving its trail. Nil when the schedule holds nothing else.
+    private func nextAlertEdge(now: Date) -> Date? {
+        let lead = TimeInterval(max(AppSettings.eventAlertLead, 0) * 60)
+        let trail = TimeInterval(max(AppSettings.eventAlertTrail, 0) * 60)
+        return CalendarStore.shared.schedule
+            .filter { !$0.isAllDay }
+            .flatMap { [$0.start.addingTimeInterval(-lead), $0.start.addingTimeInterval(trail)] }
+            .filter { $0 > now }
+            .min()
+    }
+
+    /// While an alert is up the island re-checks every second, because the window closes on a whole
+    /// second and the countdown has to end with it. The rest of the time a single timer is armed for the
+    /// next window edge instead, so an idle Mac is not woken 86 400 times a day for a check that changes
+    /// nothing. The schedule and the settings reach `updateEventAlert()` through their own publishers.
+    private func rescheduleAlertTimer(now: Date, alertActive: Bool) {
+        alertTimer?.invalidate()
+        alertTimer = nil
+
+        let fire: Date
+        let tolerance: TimeInterval
+        if alertActive {
+            fire = now.addingTimeInterval(Self.alertTickInterval)
+            tolerance = 0.2
+        } else if let edge = nextAlertEdge(now: now) {
+            fire = edge
+            tolerance = 0.5
+        } else {
+            return
+        }
+
+        let timer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateEventAlert() }
+        }
+        timer.tolerance = tolerance
+        RunLoop.main.add(timer, forMode: .common)
+        alertTimer = timer
     }
 
     /// Timed schedule events within [start − lead, start + trail).
@@ -166,6 +213,8 @@ final class IslandController {
         if viewModel.eventAlertStart != target { viewModel.eventAlertStart = target }
 
         let active = !pending.isEmpty
+        rescheduleAlertTimer(now: now, alertActive: active)
+
         guard active != viewModel.hasEventAlert else { return }
         withAnimation(alertAnimation) { viewModel.hasEventAlert = active }
         handleMouseMove()
@@ -261,9 +310,17 @@ final class IslandController {
         }
     }
 
+    /// Mirror of the panel's `ignoresMouseEvents`. Writing that property is a round trip to the window
+    /// server, and a mouse move arrives a few hundred times a second, so it is only written on a real flip.
+    private func setPanelIgnoresMouse(_ ignores: Bool) {
+        guard ignores != panelIgnoresMouse else { return }
+        panelIgnoresMouse = ignores
+        panel?.ignoresMouseEvents = ignores
+    }
+
     private func handleMouseMove() {
         let inside = viewModel.hitRect.contains(NSEvent.mouseLocation)
-        panel?.ignoresMouseEvents = !inside
+        setPanelIgnoresMouse(!inside)
 
         switch viewModel.state {
         case .collapsed:
@@ -301,7 +358,7 @@ final class IslandController {
             viewModel.state = .expanded
             viewModel.isHovering = false
         }
-        panel?.ignoresMouseEvents = false
+        setPanelIgnoresMouse(false)
     }
 
     private func collapse() {
