@@ -16,7 +16,9 @@ final class NotchPanel: NSPanel {
         isMovable = false
         isFloatingPanel = true
         hidesOnDeactivate = false
-        ignoresMouseEvents = true
+        // Clicks land on the island itself; the transparent padding around it is left out of the
+        // window's hit test by its alpha, so the menu bar beside the notch stays clickable.
+        ignoresMouseEvents = false
         acceptsMouseMovedEvents = true
         level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
@@ -31,7 +33,33 @@ final class NotchPanel: NSPanel {
     }
 }
 
-/// Hosting view that reacts to the very first click without activating the app.
+/// Hosting view that reacts to the very first click without activating the app, and reports the cursor
+/// entering and leaving the island.
+///
+/// The tracking area replaces a global `mouseMoved` monitor: a monitor is woken by every move anywhere
+/// on screen, while this only fires when the cursor crosses the island itself.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    var onMouseEntered: () -> Void = {}
+    var onMouseExited: () -> Void = {}
+
+    private var trackingArea: NSTrackingArea?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        // The app is an accessory and its panel never becomes key, so the area has to stay active
+        // whatever the app's state, dragging included.
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect, .enabledDuringMouseDrag],
+            owner: self
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onMouseEntered() }
+    override func mouseExited(with event: NSEvent) { onMouseExited() }
 }
