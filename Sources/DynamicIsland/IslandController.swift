@@ -11,6 +11,8 @@ final class IslandController {
     private var alertTimer: Timer?
     /// Matches `NotchPanel`'s initial state; see `setPanelIgnoresMouse`.
     private var panelIgnoresMouse = true
+    private var cursorTimer: Timer?
+    private var cursorPollInterval: TimeInterval = 0
     private var wakeObserver: NSObjectProtocol?
     private var cancellables: Set<AnyCancellable> = []
     /// Events (`DayEvent.id`) whose alert the user closed; they stay silent until their window ends.
@@ -26,6 +28,13 @@ final class IslandController {
     private static let alertSoundName = "Glass"
     /// Re-check interval while an alert is on screen.
     private static let alertTickInterval: TimeInterval = 1
+    /// Cursor poll while it is nowhere near the island.
+    private static let farPollInterval: TimeInterval = 0.25
+    /// Cursor poll near the top of the island's screen, where a late hover would show.
+    private static let nearPollInterval: TimeInterval = 0.05
+    /// Band at the top of that screen counted as near. Deep enough that the rate is already up by the
+    /// time the cursor reaches the island.
+    private static let nearBand: CGFloat = 300
     private static let alertSoundDuration: TimeInterval = 2
 
     /// Extra transparent space around the expanded island so the shadow is not clipped.
@@ -287,20 +296,10 @@ final class IslandController {
     // MARK: - Mouse tracking
 
     private func installMonitors() {
-        let moveMask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
-
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: moveMask, handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.handleMouseMove() }
-        }) {
-            monitors.append(global)
-        }
-
-        if let local = NSEvent.addLocalMonitorForEvents(matching: moveMask, handler: { [weak self] event in
-            MainActor.assumeIsolated { self?.handleMouseMove() }
-            return event
-        }) {
-            monitors.append(local)
-        }
+        // Mouse moves are polled rather than monitored: a monitor is woken by every move anywhere on
+        // screen, a few hundred times a second, while the island only needs to know where the cursor
+        // is right now. Clicks are rare, so those stay on a monitor.
+        startCursorPoll(interval: Self.farPollInterval)
 
         // Clicks outside our window arrive only through the global monitor.
         if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
@@ -316,6 +315,33 @@ final class IslandController {
         guard ignores != panelIgnoresMouse else { return }
         panelIgnoresMouse = ignores
         panel?.ignoresMouseEvents = ignores
+    }
+
+    /// Runs the timer at `interval`, leaving it alone when it is already the one in place.
+    private func startCursorPoll(interval: TimeInterval) {
+        guard cursorPollInterval != interval else { return }
+        cursorTimer?.invalidate()
+        cursorPollInterval = interval
+
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollCursor() }
+        }
+        timer.tolerance = interval / 4
+        // Menus and drags run their own run loop modes; the island has to keep up through those too.
+        RunLoop.main.add(timer, forMode: .common)
+        cursorTimer = timer
+    }
+
+    /// Reads the cursor, then picks the rate for the next reads: fast near the island, slow elsewhere.
+    private func pollCursor() {
+        handleMouseMove()
+
+        let location = NSEvent.mouseLocation
+        let screen = viewModel.notch.screenFrame
+        let near = viewModel.isExpanded
+            || (location.x >= screen.minX && location.x <= screen.maxX
+                && location.y >= screen.maxY - Self.nearBand)
+        startCursorPoll(interval: near ? Self.nearPollInterval : Self.farPollInterval)
     }
 
     private func handleMouseMove() {
