@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CalendarStore.shared.start()
         WeatherStore.shared.start()
         KeepAwakeManager.shared.start()
-        DeviceBatteryStore.shared.start()
         UpdateManager.shared.startAutoCheck()
     }
 

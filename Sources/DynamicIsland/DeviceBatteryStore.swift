@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import IOKit
 
-/// Battery levels of the Bluetooth accessories paired with this Mac, refreshed in the background.
+/// Battery levels of the Bluetooth accessories paired with this Mac, refreshed only when the island expands (or Settings asks).
 ///
 /// Three sources, merged by device name: the IORegistry (Magic Mouse / Keyboard / Trackpad report
 /// `BatteryPercent` there), `system_profiler SPBluetoothDataType` (AirPods report left/right/case there)
@@ -10,7 +10,6 @@ import IOKit
 @MainActor
 final class DeviceBatteryStore: ObservableObject {
     static let shared = DeviceBatteryStore()
-    static let refreshInterval: TimeInterval = 60
     /// Icons the mini dashboard shows at most.
     static let maxShown = 4
 
@@ -33,39 +32,9 @@ final class DeviceBatteryStore: ObservableObject {
     /// A level this old is treated as unknown rather than shown.
     nonisolated static let phoneStaleInterval: TimeInterval = 6 * 60 * 60
 
-    private var timer: Timer?
     private var task: Task<Void, Never>?
-    private var wakeObserver: NSObjectProtocol?
-    private var defaultsObserver: NSObjectProtocol?
     /// Last seen level per device; a level that went up means the device is on a charger.
     private var lastPercent: [String: Int] = [:]
-
-    // MARK: - Lifecycle
-
-    func start() {
-        guard timer == nil else { return }
-
-        let timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { _ in
-            MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
-        }
-        timer.tolerance = 10
-        self.timer = timer
-
-        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
-        }
-
-        // Picking the iPhone file in Settings should take effect at once.
-        defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
-        }
-
-        refresh()
-    }
 
     func refresh() {
         guard task == nil else { return }
