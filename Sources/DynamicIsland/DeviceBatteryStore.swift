@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import IOKit
 
-/// Battery levels of the Bluetooth accessories paired with this Mac, refreshed only when the island expands (or Settings asks).
+/// Battery levels of the Bluetooth accessories paired with this Mac, refreshed every minute, or only when the island expands in power saving mode.
 ///
 /// Three sources, merged by device name: the IORegistry (Magic Mouse / Keyboard / Trackpad report
 /// `BatteryPercent` there), `system_profiler SPBluetoothDataType` (AirPods report left/right/case there)
@@ -10,6 +10,7 @@ import IOKit
 @MainActor
 final class DeviceBatteryStore: ObservableObject {
     static let shared = DeviceBatteryStore()
+    static let refreshInterval: TimeInterval = 60
     /// Icons the mini dashboard shows at most.
     static let maxShown = 4
 
@@ -32,9 +33,48 @@ final class DeviceBatteryStore: ObservableObject {
     /// A level this old is treated as unknown rather than shown.
     nonisolated static let phoneStaleInterval: TimeInterval = 6 * 60 * 60
 
+    private var timer: Timer?
     private var task: Task<Void, Never>?
+    private var wakeObserver: NSObjectProtocol?
+    private var defaultsObserver: NSObjectProtocol?
     /// Last seen level per device; a level that went up means the device is on a charger.
     private var lastPercent: [String: Int] = [:]
+
+    func start() {
+        guard defaultsObserver == nil else { return }
+
+        // Picking the iPhone file or flipping power saving in Settings should take effect at once.
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { DeviceBatteryStore.shared.applyMode() }
+        }
+        applyMode()
+    }
+
+    /// Power saving: no background polling, levels are read only when the island expands.
+    private func applyMode() {
+        if AppSettings.powerSaving {
+            timer?.invalidate()
+            timer = nil
+            if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+            wakeObserver = nil
+            return
+        }
+        if timer == nil {
+            let timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { _ in
+                MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
+            }
+            timer.tolerance = 10
+            self.timer = timer
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { DeviceBatteryStore.shared.refresh() }
+            }
+        }
+        refresh()
+    }
 
     func refresh() {
         guard task == nil else { return }

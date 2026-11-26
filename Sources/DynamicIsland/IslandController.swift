@@ -382,7 +382,7 @@ final class IslandController {
     private func expand() {
         guard !viewModel.isExpanded else { return }
         cancelScheduledCollapse()
-        DeviceBatteryStore.shared.refresh()
+        if AppSettings.powerSaving { DeviceBatteryStore.shared.refresh() }
         if AppSettings.hapticFeedback {
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         }

@@ -17,6 +17,7 @@ enum AppSettings {
     static let ecoFlowRegionKey = "ecoFlowRegion"
     static let languageKey = "language"
     static let topRowScaleKey = "topRowScale"
+    static let powerSavingKey = "powerSaving"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
@@ -33,10 +34,12 @@ enum AppSettings {
             ecoFlowRegionKey: EcoFlowClient.Region.europe.rawValue,
             languageKey: AppLanguage.system.rawValue,
             topRowScaleKey: defaultTopRowScale,
+            powerSavingKey: false,
         ])
     }
 
     static var collapseOnMouseExit: Bool { UserDefaults.standard.bool(forKey: collapseOnMouseExitKey) }
+    static var powerSaving: Bool { UserDefaults.standard.bool(forKey: powerSavingKey) }
     static var hapticFeedback: Bool { UserDefaults.standard.bool(forKey: hapticFeedbackKey) }
     static var autoCheckUpdates: Bool { UserDefaults.standard.bool(forKey: autoCheckUpdatesKey) }
 

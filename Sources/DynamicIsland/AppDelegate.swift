@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         islandController = controller
 
+        DeviceBatteryStore.shared.start()
         CalendarStore.shared.start()
         WeatherStore.shared.start()
         KeepAwakeManager.shared.start()

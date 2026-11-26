@@ -48,6 +48,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.eventAlertLeadKey) private var eventAlertLead = 5
     @AppStorage(AppSettings.eventAlertTrailKey) private var eventAlertTrail = 5
     @AppStorage(AppSettings.eventAlertSoundKey) private var eventAlertSound = true
+    @AppStorage(AppSettings.powerSavingKey) private var powerSaving = false
     @AppStorage(AppSettings.lowBatteryAlertKey) private var lowBatteryAlert = true
     @AppStorage(AppSettings.lowBatteryThresholdKey) private var lowBatteryThreshold = 20
     @AppStorage(AppSettings.phoneBatteryEnabledKey) private var phoneBatteryEnabled = false
@@ -212,6 +213,10 @@ struct SettingsView: View {
     @ViewBuilder
     private var batterySection: some View {
         Section(tr("Device Battery", "Заряд устройств")) {
+            Toggle(tr("Power saving mode", "Режим экономии"), isOn: $powerSaving)
+            Text(tr("Battery levels are read only when the island expands, not in the background.", "Заряд читается только при раскрытии острова, а не в фоне."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Toggle(tr("Warn about a low accessory battery", "Предупреждать о низком заряде аксессуара"), isOn: $lowBatteryAlert)
             Stepper(
                 tr("Warn at \(lowBatteryThreshold)% and below", "Предупреждать при \(lowBatteryThreshold)% и ниже"),
